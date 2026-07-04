@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>World Forge — Minecraft world generator</title>
+<style>
+  :root{
+    --bg:#0f1216; --plate:#161b21; --panel:#1a2027; --line:#28313c;
+    --ink:#e9eef3; --muted:#8695a5; --faint:#5d6b7a;
+    --grass:#74c256; --diamond:#57d6dd; --ore:#e2b551; --bedrock:#3a4653;
+    --danger:#e0715e;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);
+    font-size:14px;line-height:1.5;
+    background-image:linear-gradient(var(--line) 1px,transparent 1px),
+      linear-gradient(90deg,var(--line) 1px,transparent 1px);
+    background-size:44px 44px;background-position:center;}
+  .masthead{border-bottom:1px solid var(--line);background:rgba(15,18,22,.85);
+    backdrop-filter:blur(4px);position:sticky;top:0;z-index:5}
+  .masthead .row{max-width:1200px;margin:0 auto;padding:16px 24px;
+    display:flex;align-items:baseline;gap:16px}
+  .brand{font-family:var(--mono);font-weight:600;letter-spacing:.08em;
+    font-size:16px;text-transform:uppercase}
+  .brand b{color:var(--grass)}
+  .tag{font-family:var(--mono);color:var(--faint);font-size:12px}
+  .coord{margin-left:auto;font-family:var(--mono);color:var(--diamond);font-size:12px}
+
+  .wrap{max-width:1200px;margin:0 auto;padding:24px;display:grid;
+    grid-template-columns:1fr 420px;gap:24px;align-items:start}
+  @media(max-width:920px){.wrap{grid-template-columns:1fr}}
+
+  fieldset{border:1px solid var(--line);border-radius:10px;margin:0 0 18px;
+    padding:16px 18px 18px;background:linear-gradient(180deg,rgba(255,255,255,.015),transparent)}
+  legend{font-family:var(--mono);font-size:11px;letter-spacing:.14em;
+    text-transform:uppercase;color:var(--muted);padding:0 8px}
+  legend .n{color:var(--grass)}
+
+  .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px 18px}
+  .grid.three{grid-template-columns:repeat(3,1fr)}
+  .field{display:flex;flex-direction:column;gap:5px;min-width:0}
+  .field label{font-size:12px;color:var(--muted)}
+  .field .hint{font-size:11px;color:var(--faint);font-family:var(--mono)}
+  input[type=text],input[type=number],select{
+    width:100%;background:#0c0f13;border:1px solid var(--line);color:var(--ink);
+    border-radius:7px;padding:9px 10px;font-family:var(--mono);font-size:13px}
+  input:focus,select:focus{outline:2px solid var(--diamond);outline-offset:-1px;
+    border-color:var(--diamond)}
+  .check{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--ink);
+    padding-top:2px}
+  .check input{width:16px;height:16px;accent-color:var(--grass)}
+  .slider{display:flex;flex-direction:column;gap:5px}
+  .slider input[type=range]{width:100%;accent-color:var(--ore)}
+  .slider .val{font-family:var(--mono);color:var(--ore);font-size:12px}
+
+  /* ore table */
+  table.ores{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:12px}
+  table.ores th{color:var(--faint);font-weight:500;text-align:left;padding:4px 6px;
+    font-size:10px;letter-spacing:.08em;text-transform:uppercase}
+  table.ores td{padding:3px 4px}
+  table.ores input{padding:6px 7px}
+  .oname{width:130px}
+  .rm{background:none;border:1px solid var(--line);color:var(--danger);
+    border-radius:6px;cursor:pointer;padding:6px 9px;font-family:var(--mono)}
+  .rm:hover{border-color:var(--danger)}
+  .addore{margin-top:10px;background:none;border:1px dashed var(--line);
+    color:var(--muted);border-radius:7px;padding:8px 12px;cursor:pointer;
+    font-family:var(--mono);font-size:12px}
+  .addore:hover{border-color:var(--grass);color:var(--grass)}
+
+  /* right rail: the plate */
+  .rail{position:sticky;top:88px}
+  .plate{border:1px solid var(--line);border-radius:12px;background:var(--plate);
+    overflow:hidden}
+  .plate .head{display:flex;justify-content:space-between;align-items:center;
+    padding:12px 14px;border-bottom:1px solid var(--line);
+    font-family:var(--mono);font-size:11px;letter-spacing:.12em;
+    text-transform:uppercase;color:var(--muted)}
+  .plate .head .st{color:var(--grass)}
+  .mapbox{position:relative;aspect-ratio:1;background:
+    radial-gradient(circle at 50% 50%,#12171d,#0b0e12);display:flex;
+    align-items:center;justify-content:center}
+  .mapbox img{width:100%;height:100%;object-fit:contain;image-rendering:pixelated;
+    display:none}
+  .crosshair{position:absolute;inset:0;pointer-events:none}
+  .crosshair:before,.crosshair:after{content:"";position:absolute;background:rgba(87,214,221,.35)}
+  .crosshair:before{left:50%;top:0;bottom:0;width:1px;transform:translateX(-.5px)}
+  .crosshair:after{top:50%;left:0;right:0;height:1px;transform:translateY(-.5px)}
+  .origin{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+    font-family:var(--mono);font-size:10px;color:var(--diamond);
+    background:rgba(11,14,18,.7);padding:2px 5px;border-radius:4px}
+  .placeholder{font-family:var(--mono);color:var(--faint);font-size:12px;
+    text-align:center;padding:0 30px;line-height:1.7}
+  .placeholder b{color:var(--bedrock);display:block;font-size:30px;
+    letter-spacing:.3em;margin-bottom:8px}
+
+  .go{display:block;width:100%;margin-top:14px;background:var(--grass);
+    color:#08130a;border:none;border-radius:9px;padding:14px;font-weight:700;
+    font-size:14px;cursor:pointer;font-family:var(--mono);letter-spacing:.05em}
+  .go:hover{filter:brightness(1.07)}
+  .go:disabled{opacity:.5;cursor:not-allowed}
+
+  .progress{margin-top:12px;height:8px;border-radius:5px;background:#0c0f13;
+    border:1px solid var(--line);overflow:hidden;display:none}
+  .progress .bar{height:100%;width:0;background:linear-gradient(90deg,var(--grass),var(--diamond));
+    transition:width .3s}
+  .status{margin-top:8px;font-family:var(--mono);font-size:12px;color:var(--muted);
+    min-height:16px}
+
+  .stats{margin-top:12px;display:none;font-family:var(--mono);font-size:12px;
+    color:var(--muted);border-top:1px dashed var(--line);padding-top:12px}
+  .stats div{display:flex;justify-content:space-between;padding:2px 0}
+  .stats b{color:var(--ink);font-weight:500}
+  .dl{display:none;width:100%;margin-top:12px;text-align:center;
+    background:var(--diamond);color:#062023;border:none;border-radius:9px;
+    padding:13px;font-weight:700;font-family:var(--mono);cursor:pointer;
+    text-decoration:none;letter-spacing:.05em}
+  .dl:hover{filter:brightness(1.07)}
+  .err{display:none;margin-top:12px;border:1px solid var(--danger);
+    border-radius:8px;padding:10px 12px;color:var(--danger);font-size:12px;
+    font-family:var(--mono);white-space:pre-wrap;max-height:200px;overflow:auto}
+  .foot{max-width:1200px;margin:0 auto;padding:0 24px 40px;color:var(--faint);
+    font-family:var(--mono);font-size:11px}
+  .foot code{color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="masthead"><div class="row">
+  <span class="brand"><b>◧</b> World&nbsp;Forge</span>
+  <span class="tag">finite bedrock-walled Minecraft worlds · Java Edition</span>
+  <span class="coord" id="coord">origin 0 / 0 / 0</span>
+</div></div>
+
+<div class="wrap">
+  <!-- ============ CONTROLS ============ -->
+  <form id="form">
+    <fieldset>
+      <legend><span class="n">01</span> World</legend>
+      <div class="grid">
+        <div class="field"><label>World name</label>
+          <input type="text" id="name" value="Forged World"></div>
+        <div class="field"><label>Seed</label>
+          <input type="number" id="seed" value="0">
+          <span class="hint">same seed + settings → same world</span></div>
+        <div class="field"><label>Width &amp; length (blocks, square)</label>
+          <input type="number" id="size" value="1000" min="16" max="6000" step="16">
+          <span class="hint">centered on 0, 0 — grows outward evenly</span></div>
+        <div class="field"><label>Target Minecraft version</label>
+          <select id="version">
+            {% for v in versions %}<option value="{{v}}" {% if v=='1.20.1' %}selected{% endif %}>{{v}}</option>{% endfor %}
+          </select>
+          <span class="hint">opens in this version or newer</span></div>
+        <div class="field"><label>Starting mode</label>
+          <select id="game_type"><option value="0">Survival</option>
+            <option value="1">Creative</option></select></div>
+        <div class="field check" style="align-self:end">
+          <input type="checkbox" id="allow_commands" checked>
+          <label for="allow_commands" style="color:var(--ink)">Allow cheats / commands</label></div>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend><span class="n">02</span> Vertical shape</legend>
+      <div class="grid three">
+        <div class="field"><label>Bedrock floor Y</label>
+          <input type="number" id="floor_y" value="-20">
+          <span class="hint">void below this</span></div>
+        <div class="field"><label>Water level Y</label>
+          <input type="number" id="water_level" value="62"></div>
+        <div class="field"><label>Base land height Y</label>
+          <input type="number" id="base_height" value="70"></div>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend><span class="n">03</span> Terrain &amp; mountains</legend>
+      <div class="grid">
+        <div class="field slider"><label>Mountain amount</label>
+          <input type="range" id="mountain_amount" min="0" max="1" step="0.05" value="0.55">
+          <span class="val" id="mountain_amount_v">0.55</span></div>
+        <div class="field"><label>Mountain height (blocks)</label>
+          <input type="number" id="mountain_amp" value="44"></div>
+        <div class="field"><label>Rolling-hill height (blocks)</label>
+          <input type="number" id="hill_amp" value="10"></div>
+        <div class="field"><label>Snow line Y (snow above)</label>
+          <input type="number" id="snowline_y" value="90"></div>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend><span class="n">04</span> Caves, water &amp; trees</legend>
+      <div class="grid">
+        <div class="field check"><input type="checkbox" id="caves" checked>
+          <label for="caves" style="color:var(--ink)">Carve caves</label></div>
+        <div class="field slider"><label>Cave amount</label>
+          <input type="range" id="cave_intensity" min="0.2" max="2" step="0.1" value="1">
+          <span class="val" id="cave_intensity_v">1.0</span></div>
+        <div class="field check"><input type="checkbox" id="rivers" checked>
+          <label for="rivers" style="color:var(--ink)">Rivers</label></div>
+        <div class="field slider"><label>River amount</label>
+          <input type="range" id="river_amount" min="0" max="1" step="0.05" value="0.5">
+          <span class="val" id="river_amount_v">0.50</span></div>
+        <div class="field check"><input type="checkbox" id="lakes" checked>
+          <label for="lakes" style="color:var(--ink)">Small lakes</label></div>
+        <div class="field check"><input type="checkbox" id="trees" checked>
+          <label for="trees" style="color:var(--ink)">Trees</label></div>
+        <div class="field slider"><label>Tree density</label>
+          <input type="range" id="tree_density" min="0" max="2" step="0.1" value="1">
+          <span class="val" id="tree_density_v">1.0</span></div>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend><span class="n">05</span> Bedrock border wall</legend>
+      <div class="grid three">
+        <div class="field check"><input type="checkbox" id="wall" checked>
+          <label for="wall" style="color:var(--ink)">Wall the border</label></div>
+        <div class="field"><label>Wall bottom Y</label>
+          <input type="number" id="wall_min_y" value="-64">
+          <span class="hint">min world height</span></div>
+        <div class="field"><label>Wall top Y</label>
+          <input type="number" id="wall_max_y" value="319">
+          <span class="hint">no ceiling above</span></div>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend><span class="n">06</span> Ore veins</legend>
+      <table class="ores"><thead><tr>
+        <th class="oname">Ore</th><th>Min Y</th><th>Max Y</th>
+        <th>Veins / chunk</th><th>Vein size</th><th></th>
+      </tr></thead><tbody id="orebody"></tbody></table>
+      <button type="button" class="addore" id="addore">+ add ore</button>
+    </fieldset>
+  </form>
+
+  <!-- ============ PLATE ============ -->
+  <div class="rail">
+    <div class="plate">
+      <div class="head"><span>Survey plate</span><span class="st" id="plate_st">idle</span></div>
+      <div class="mapbox">
+        <img id="mapimg" alt="world preview">
+        <div class="crosshair" id="crosshair"></div>
+        <div class="origin" id="origin" style="display:none">0,0</div>
+        <div class="placeholder" id="ph"><b>▦</b>preview renders here<br>as a top-down map</div>
+      </div>
+    </div>
+    <button class="go" id="go">Forge world</button>
+    <div class="progress" id="progress"><div class="bar" id="bar"></div></div>
+    <div class="status" id="status"></div>
+    <div class="stats" id="stats"></div>
+    <a class="dl" id="dl">↓ Download world (.zip)</a>
+    <div class="err" id="err"></div>
+  </div>
+</div>
+
+<div class="foot">
+  Unzip into your Minecraft <code>saves/</code> folder, then open it from the world
+  list. The world is sealed in bedrock from wall-bottom to wall-top; everything
+  generates outward from spawn at 0, 0.
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+const DEFAULT_ORES=[
+  {name:"diamond_ore",y_min:-19,y_max:5,veins_per_chunk:8,vein_size:5},
+  {name:"coal_ore",y_min:5,y_max:110,veins_per_chunk:11,vein_size:9},
+  {name:"iron_ore",y_min:-16,y_max:66,veins_per_chunk:9,vein_size:6},
+];
+function oreRow(o){
+  const tr=document.createElement("tr");
+  tr.innerHTML=`
+   <td><input type="text" class="oname" value="${o.name}"></td>
+   <td><input type="number" value="${o.y_min}" style="width:64px"></td>
+   <td><input type="number" value="${o.y_max}" style="width:64px"></td>
+   <td><input type="number" value="${o.veins_per_chunk}" step="0.5" style="width:70px"></td>
+   <td><input type="number" value="${o.vein_size}" style="width:60px"></td>
+   <td><button type="button" class="rm">✕</button></td>`;
+  tr.querySelector(".rm").onclick=()=>tr.remove();
+  return tr;
+}
+DEFAULT_ORES.forEach(o=>$("orebody").appendChild(oreRow(o)));
+$("addore").onclick=()=>$("orebody").appendChild(
+  oreRow({name:"redstone_ore",y_min:-19,y_max:15,veins_per_chunk:7,vein_size:6}));
+
+["mountain_amount","cave_intensity","river_amount","tree_density"].forEach(id=>{
+  const el=$(id),v=$(id+"_v");
+  const f=()=>v.textContent=(+el.value).toFixed(2).replace(/0$/, id=="mountain_amount"?"0":"");
+  el.addEventListener("input",()=>v.textContent=(+el.value).toFixed(id=="cave_intensity"||id=="tree_density"?1:2));
+});
+
+function collect(){
+  const ores=[...$("orebody").querySelectorAll("tr")].map(tr=>{
+    const i=tr.querySelectorAll("input");
+    return {name:i[0].value,y_min:+i[1].value,y_max:+i[2].value,
+            veins_per_chunk:+i[3].value,vein_size:+i[4].value};
+  });
+  return {
+    name:$("name").value,size:+$("size").value,seed:+$("seed").value,
+    version:$("version").value,game_type:+$("game_type").value,
+    allow_commands:$("allow_commands").checked,
+    floor_y:+$("floor_y").value,water_level:+$("water_level").value,
+    base_height:+$("base_height").value,
+    mountain_amount:+$("mountain_amount").value,mountain_amp:+$("mountain_amp").value,
+    hill_amp:+$("hill_amp").value,snowline_y:+$("snowline_y").value,
+    caves:$("caves").checked,cave_intensity:+$("cave_intensity").value,
+    rivers:$("rivers").checked,river_amount:+$("river_amount").value,
+    lakes:$("lakes").checked,trees:$("trees").checked,
+    tree_density:+$("tree_density").value,
+    wall:$("wall").checked,wall_min_y:+$("wall_min_y").value,
+    wall_max_y:+$("wall_max_y").value,ores
+  };
+}
+
+let poll=null;
+function setStatus(t){$("status").textContent=t;}
+$("go").onclick=async()=>{
+  const cfg=collect();
+  $("coord").textContent=`origin 0 / ${cfg.base_height} / 0`;
+  $("go").disabled=true;$("err").style.display="none";
+  $("stats").style.display="none";$("dl").style.display="none";
+  $("progress").style.display="block";$("bar").style.width="2%";
+  $("plate_st").textContent="forging";
+  setStatus("Sending job…");
+  let res;
+  try{
+    res=await(await fetch("/generate",{method:"POST",
+      headers:{"Content-Type":"application/json"},body:JSON.stringify(cfg)})).json();
+  }catch(e){fail("Could not reach the server.");return;}
+  const job=res.job_id;
+  poll=setInterval(async()=>{
+    let p;
+    try{p=await(await fetch("/progress/"+job)).json();}catch(e){return;}
+    $("bar").style.width=Math.max(2,p.progress||0)+"%";
+    if(p.message)setStatus(p.message);
+    if(p.done){
+      clearInterval(poll);$("go").disabled=false;
+      if(p.error){fail(p.error+"\n\n"+(p.traceback||""));return;}
+      $("plate_st").textContent="mapped";
+      const img=$("mapimg");img.src=p.preview;img.style.display="block";
+      $("ph").style.display="none";$("origin").style.display="block";
+      showStats(p.stats);
+      const dl=$("dl");dl.href="/download/"+job;dl.style.display="block";
+      setStatus("World ready.");
+    }
+  },500);
+};
+function fail(msg){
+  $("plate_st").textContent="error";$("go").disabled=false;
+  if(poll)clearInterval(poll);
+  const e=$("err");e.style.display="block";e.textContent=msg;
+  setStatus("Generation failed.");
+}
+function showStats(s){
+  if(!s)return;
+  const box=$("stats");box.style.display="block";
+  const [x0,x1]=s.bounds;
+  box.innerHTML=`
+   <div><span>chunks generated</span><b>${s.chunks}</b></div>
+   <div><span>region files</span><b>${s.regions}</b></div>
+   <div><span>world bounds (x,z)</span><b>${x0} … ${x1}</b></div>
+   <div><span>spawn</span><b>${s.spawn.join(" / ")}</b></div>
+   <div><span>build time</span><b>${s.seconds}s</b></div>`;
+}
+</script>
+</body>
+</html>
