@@ -62,22 +62,24 @@ python cli.py --help      # all options
 - **Ore veins** — a table of ores, each with its own Y range, veins-per-chunk
   rate, vein size, and a **depth bias** (cluster low / mid / high). Defaults ship
   the full vanilla-flavoured set — **coal, iron, copper, gold, redstone, lapis,
-  and very common diamond** — placed at vanilla-like depths (diamond, redstone
+  and diamond** — placed at vanilla-like depths (diamond, redstone
   and gold skew deep; lapis is rarest).
 - **Terrain & mountains** — hill height, mountain amount/height, and the snow line
   (snowy caps get a top snow layer).
-- **Biomes** — plains, forest, **desert**, taiga, jungle, snowy plains, snowy
-  taiga, snowy mountain slopes, beaches, and river, chosen by blended
-  temperature/humidity so zones transition naturally. Tuned roughly **half
-  plains / half forest** in the temperate band (fewer, calmer forests).
-  **No oceans**; gentle rivers and small ponds only.
+- **Biomes** — plains, forest, birch forest, dark oak forest, **desert**,
+  badlands/mesa, taiga, jungle, snowy plains, snowy taiga, snowy mountain
+  slopes, beaches, and river, chosen by blended temperature/humidity so zones
+  transition naturally. Auto-balancing keeps individual seeds from becoming all
+  snow, all forest, or all plains. **No oceans**; gentle rivers and small ponds
+  only.
 - **Natural water** — winding rivers and small lakes with **soft, gradual banks**
   (no cliff-walled trenches), **sand/gravel beaches**, and **clay & gravel beds**.
 - **Underground variety** — **diorite / granite / andesite** pockets, dirt &
-  gravel blobs, a bottom **lava aquifer**, small **water pockets**, and **ravines
+  gravel blobs, a bottom **lava aquifer**, dense branching caves, and **ravines
   that open from the surface** down to the depths.
 - **Surface decoration** — scattered grass & tall grass, biome flowers, **sugar
-  cane** by water, and **cactus / dead bushes** in deserts.
+  cane** by water, **cactus / dead bushes** in arid biomes, and larger 2×2
+  jungle trees with fanned-out leaf crowns.
 - **Caves, ravines, rivers, lakes, trees, decoration, stone variants** — toggle
   and tune each.
 - **Target version** — 1.20.1 → 1.21.7 (worlds also open in newer versions).
