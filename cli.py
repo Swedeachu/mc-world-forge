@@ -51,6 +51,8 @@ def main():
     ap.add_argument("--wall-min-y", type=int, default=-64)
     ap.add_argument("--wall-max-y", type=int, default=319)
     ap.add_argument("--creative", action="store_true")
+    ap.add_argument("--workers", type=int, default=None,
+                    help="generation worker processes. Default uses up to 12 CPU cores.")
 
     ap.add_argument("--diamond-veins", type=float, default=None,
                     help="override diamond veins per chunk. Set 0 to omit diamonds.")
@@ -90,10 +92,10 @@ def main():
         sys.stdout.flush()
 
     os.makedirs(args.out, exist_ok=True)
-    res = generate_world(cfg, args.out, prog)
+    res = generate_world(cfg, args.out, prog, workers=args.workers)
     print()
     print(f"World written to: {args.out}")
-    print(f"  chunks={res['chunks']} regions={res['regions']} "
+    print(f"  chunks={res['chunks']} regions={res['regions']} workers={res['workers']} "
           f"bounds={res['bounds']} spawn={res['spawn']} time={res['seconds']}s")
     print("Copy this folder into your Minecraft 'saves' directory to play.")
 

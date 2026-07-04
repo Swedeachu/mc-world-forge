@@ -16,6 +16,11 @@ decoration (grass, flowers, sugar cane, cactus).
 """
 import os
 import time
+import multiprocessing as mp
+import queue
+import threading
+from concurrent.futures import ProcessPoolExecutor
+
 import numpy as np
 from dataclasses import dataclass, field
 from typing import List, Dict, Callable, Optional
@@ -194,6 +199,75 @@ class WorldConfig:
     allow_commands: bool = True
 
     ores: List[OreCfg] = field(default_factory=_default_ores)
+
+
+# ---------------------------------------------------------------------------
+# Palette preparation / worker planning
+# ---------------------------------------------------------------------------
+
+def _prepare_palettes(cfg: WorldConfig):
+    """Create stable block and biome palettes before workers generate chunks."""
+    blocks = Blocks(cfg.data_version)
+
+    # These are normally registered lazily by tree placement. Pre-registering
+    # makes worker output independent from generation order.
+    for kind in ("oak", "spruce", "jungle"):
+        blocks.log(kind)
+        blocks.leaves(kind)
+
+    # Ores are user-configurable, so register the active set in config order.
+    for ore in cfg.ores:
+        blocks.ore(ore.name)
+
+    biome_reg = Registry()
+    for biome in BIOME_COLORS:
+        biome_reg.get(biome)
+    biome_reg.get("minecraft:plains")
+
+    return blocks, biome_reg
+
+
+def _chunk_rng_seed(seed, cx, cz):
+    return (seed & 0xFFFFFFFF) ^ ((cx & 0xFFFF) << 8) ^ \
+           ((cz & 0xFFFF) << 20) ^ 0x9E3779B1
+
+
+def _resolve_worker_count(requested, total_regions, total_chunks):
+    if requested is None:
+        requested = min(os.cpu_count() or 1, 12)
+    requested = max(1, int(requested))
+
+    # Tiny worlds are faster without process startup / pickle overhead.
+    if total_chunks < 256 or total_regions <= 1:
+        return 1
+    return max(1, min(requested, total_regions))
+
+
+def _region_jobs(cxmin, cxmax, czmin, czmax):
+    rxmin, rxmax = cxmin >> 5, cxmax >> 5
+    rzmin, rzmax = czmin >> 5, czmax >> 5
+    for rz in range(rzmin, rzmax + 1):
+        for rx in range(rxmin, rxmax + 1):
+            jcxmin = max(cxmin, rx << 5)
+            jcxmax = min(cxmax, (rx << 5) + 31)
+            jczmin = max(czmin, rz << 5)
+            jczmax = min(czmax, (rz << 5) + 31)
+            if jcxmin <= jcxmax and jczmin <= jczmax:
+                yield rx, rz, jcxmin, jcxmax, jczmin, jczmax
+
+
+def _preview_patch_rect(cfg, xmin, xmax, pscale, preview_size, cxmin, cxmax, czmin, czmax):
+    wx0 = max(xmin, cxmin * 16)
+    wx1 = min(xmax, cxmax * 16 + 15)
+    wz0 = max(xmin, czmin * 16)
+    wz1 = min(xmax, czmax * 16 + 15)
+
+    px0 = max(0, min(preview_size - 1, (wx0 - xmin) // pscale))
+    px1 = max(0, min(preview_size - 1, (wx1 - xmin) // pscale))
+    pz0 = max(0, min(preview_size - 1, (wz0 - xmin) // pscale))
+    pz1 = max(0, min(preview_size - 1, (wz1 - xmin) // pscale))
+
+    return px0, pz0, px1 - px0 + 1, pz1 - pz0 + 1
 
 
 # ---------------------------------------------------------------------------
@@ -824,15 +898,68 @@ def _build_level_dat(cfg, spawn_y):
 # Top-level driver
 # ---------------------------------------------------------------------------
 
+def _generate_region_worker(args):
+    (job_index, cfg, xmin, xmax, pscale, preview_size,
+     rx, rz, cxmin, cxmax, czmin, czmax, progress_queue, progress_interval) = args
+
+    blocks, biome_reg = _prepare_palettes(cfg)
+    block_palette = blocks.palette()
+    biome_palette = list(biome_reg.list)
+    rw = RegionWriter(rx, rz)
+
+    patch_x, patch_z, patch_w, patch_h = _preview_patch_rect(
+        cfg, xmin, xmax, pscale, preview_size, cxmin, cxmax, czmin, czmax)
+    preview_patch = np.zeros((patch_h, patch_w, 3), dtype=np.uint8)
+
+    chunks = 0
+    last_reported_chunks = 0
+    for cz in range(czmin, czmax + 1):
+        for cx in range(cxmin, cxmax + 1):
+            rng_seed = _chunk_rng_seed(cfg.seed, cx, cz)
+            block_ids, biome_ids, H, biome_str, inside, is_water = generate_chunk(
+                cfg, blocks, biome_reg, cx, cz, xmin, xmax, rng_seed)
+
+            root = build_chunk(cx, cz, block_ids, biome_ids, block_palette,
+                               biome_palette, cfg.data_version, MIN_SECTION, N_SECTIONS)
+            rw.add_chunk(cx, cz, root)
+
+            _fill_preview_patch(preview_patch, cfg, cx, cz, xmin, pscale,
+                                patch_x, patch_z, H, biome_str, inside, is_water)
+            chunks += 1
+            if progress_queue is not None and chunks - last_reported_chunks >= progress_interval:
+                progress_queue.put((job_index, chunks))
+                last_reported_chunks = chunks
+
+    if progress_queue is not None and chunks != last_reported_chunks:
+        progress_queue.put((job_index, chunks))
+
+    return {
+        "job_index": job_index,
+        "rx": rx,
+        "rz": rz,
+        "filename": rw.filename,
+        "region": rw.to_bytes(),
+        "patch_x": patch_x,
+        "patch_z": patch_z,
+        "patch": preview_patch,
+        "chunks": chunks,
+    }
+
+
 def generate_world(cfg: WorldConfig, out_dir: str,
-                   progress: Optional[Callable[[float, str], None]] = None):
+                   progress: Optional[Callable[[float, str], None]] = None,
+                   workers: Optional[int] = None):
     def report(p, msg):
         if progress:
             progress(p, msg)
 
     t0 = time.time()
-    os.makedirs(os.path.join(out_dir, "region"), exist_ok=True)
+    region_dir = os.path.join(out_dir, "region")
+    os.makedirs(region_dir, exist_ok=True)
     os.makedirs(os.path.join(out_dir, "data"), exist_ok=True)
+    for fn in os.listdir(region_dir):
+        if fn.startswith("r.") and fn.endswith(".mca"):
+            os.remove(os.path.join(region_dir, fn))
 
     xmin = -(cfg.size // 2)
     xmax = xmin + cfg.size - 1
@@ -840,47 +967,100 @@ def generate_world(cfg: WorldConfig, out_dir: str,
     czmin, czmax = xmin >> 4, xmax >> 4
     total_chunks = (cxmax - cxmin + 1) * (czmax - czmin + 1)
 
-    blocks = Blocks(cfg.data_version)
-    biome_reg = Registry()
+    region_jobs = list(_region_jobs(cxmin, cxmax, czmin, czmax))
 
     pscale = max(1, cfg.size // 768)
-    P = (cfg.size + pscale - 1) // pscale
-    preview = np.zeros((P, P, 3), dtype=np.uint8)
+    preview_size = (cfg.size + pscale - 1) // pscale
 
-    regions: Dict[tuple, RegionWriter] = {}
-    done = 0
-    report(0.0, "Starting generation...")
+    def make_jobs(progress_queue=None, progress_interval=8):
+        return [
+            (job_index, cfg, xmin, xmax, pscale, preview_size,
+             rx, rz, jcxmin, jcxmax, jczmin, jczmax, progress_queue, progress_interval)
+            for job_index, (rx, rz, jcxmin, jcxmax, jczmin, jczmax)
+            in enumerate(region_jobs)
+        ]
 
-    for cz in range(czmin, czmax + 1):
-        for cx in range(cxmin, cxmax + 1):
-            rng_seed = (cfg.seed & 0xFFFFFFFF) ^ ((cx & 0xFFFF) << 8) ^ \
-                       ((cz & 0xFFFF) << 20) ^ 0x9E3779B1
-            block_ids, biome_ids, H, biome_str, inside, is_water = generate_chunk(
-                cfg, blocks, biome_reg, cx, cz, xmin, xmax, rng_seed)
+    preview = np.zeros((preview_size, preview_size, 3), dtype=np.uint8)
 
-            rx, rz = cx >> 5, cz >> 5
-            rw = regions.get((rx, rz))
-            if rw is None:
-                rw = RegionWriter(rx, rz)
-                regions[(rx, rz)] = rw
+    worker_count = _resolve_worker_count(workers, len(region_jobs), total_chunks)
+    progress_counts = [0] * len(region_jobs)
+    done_chunks = 0
+    preview_patches = {}
 
-            root = build_chunk(cx, cz, block_ids, biome_ids, blocks.palette(),
-                               biome_reg.list, cfg.data_version, MIN_SECTION, N_SECTIONS)
-            rw.add_chunk(cx, cz, root)
+    if worker_count == 1:
+        report(0.0, "Starting generation...")
+        for job in make_jobs():
+            result = _generate_region_worker(job)
+            _write_region_result(region_dir, result)
+            preview_patches[(result["rz"], result["rx"])] = (
+                result["patch_x"], result["patch_z"], result["patch"])
+            done_chunks += result["chunks"]
+            if progress:
+                report(0.05 + 0.85 * done_chunks / total_chunks,
+                       f"Generated {done_chunks}/{total_chunks} chunks")
+    else:
+        report(0.0, f"Starting generation on {worker_count} workers...")
+        mp_context = mp.get_context("spawn") if threading.current_thread() is not threading.main_thread() else mp.get_context()
+        progress_interval = max(1, min(16, total_chunks // max(1, worker_count * 64)))
 
-            _fill_preview(preview, cfg, cx, cz, xmin, pscale, H, biome_str,
-                          inside, is_water)
+        def drain_progress(progress_queue):
+            nonlocal done_chunks
+            updated = False
+            while True:
+                try:
+                    job_index, chunks = progress_queue.get_nowait()
+                except queue.Empty:
+                    break
+                if 0 <= job_index < len(progress_counts) and chunks > progress_counts[job_index]:
+                    progress_counts[job_index] = chunks
+                    updated = True
+            if updated:
+                done_chunks = sum(progress_counts)
+                report(0.05 + 0.85 * done_chunks / total_chunks,
+                       f"Generated {done_chunks}/{total_chunks} chunks")
 
-            done += 1
-            if progress and (done % 16 == 0 or done == total_chunks):
-                report(0.05 + 0.85 * done / total_chunks,
-                       f"Generated {done}/{total_chunks} chunks")
+        with mp_context.Manager() as manager:
+            progress_queue = manager.Queue()
+            with ProcessPoolExecutor(max_workers=worker_count, mp_context=mp_context) as pool:
+                futures = [pool.submit(_generate_region_worker, job)
+                           for job in make_jobs(progress_queue, progress_interval)]
+                pending = set(futures)
+                while pending:
+                    drain_progress(progress_queue)
+                    done_now = [fut for fut in pending if fut.done()]
+                    if not done_now:
+                        try:
+                            job_index, chunks = progress_queue.get(timeout=0.25)
+                            if 0 <= job_index < len(progress_counts) and chunks > progress_counts[job_index]:
+                                progress_counts[job_index] = chunks
+                                done_chunks = sum(progress_counts)
+                                report(0.05 + 0.85 * done_chunks / total_chunks,
+                                       f"Generated {done_chunks}/{total_chunks} chunks")
+                        except queue.Empty:
+                            pass
+                        continue
 
-    report(0.92, "Writing region files...")
-    for (rx, rz), rw in regions.items():
-        with open(os.path.join(out_dir, "region", rw.filename), "wb") as fpo:
-            fpo.write(rw.to_bytes())
+                    for fut in done_now:
+                        pending.remove(fut)
+                        result = fut.result()
+                        _write_region_result(region_dir, result)
+                        preview_patches[(result["rz"], result["rx"])] = (
+                            result["patch_x"], result["patch_z"], result["patch"])
+                        if result["chunks"] > progress_counts[result["job_index"]]:
+                            progress_counts[result["job_index"]] = result["chunks"]
+                            done_chunks = sum(progress_counts)
+                            report(0.05 + 0.85 * done_chunks / total_chunks,
+                                   f"Generated {done_chunks}/{total_chunks} chunks")
+                drain_progress(progress_queue)
 
+    report(0.92, "Compositing preview...")
+    for key in sorted(preview_patches):
+        px, pz, patch = preview_patches[key]
+        sub = preview[pz:pz + patch.shape[0], px:px + patch.shape[1]]
+        mask = patch.any(axis=2)
+        sub[mask] = patch[mask]
+
+    blocks, _ = _prepare_palettes(cfg)
     Xc, Zc = np.array([[0.0]]), np.array([[0.0]])
     spawn_y = int(_fields(cfg, blocks, Xc, Zc)["H"][0, 0]) + 1
     report(0.96, "Writing level.dat...")
@@ -891,21 +1071,27 @@ def generate_world(cfg: WorldConfig, out_dir: str,
 
     report(1.0, f"Done in {time.time()-t0:.1f}s")
     return {
-        "chunks": total_chunks, "regions": len(regions),
+        "chunks": total_chunks, "regions": len(region_jobs), "workers": worker_count,
         "spawn": (0, spawn_y, 0), "bounds": (xmin, xmax),
         "seconds": round(time.time() - t0, 1), "preview": preview,
     }
 
 
-def _fill_preview(preview, cfg, cx, cz, xmin, pscale, H, biome_str, inside, is_water):
-    P = preview.shape[0]
+def _write_region_result(region_dir, result):
+    with open(os.path.join(region_dir, result["filename"]), "wb") as fpo:
+        fpo.write(result["region"])
+
+
+def _fill_preview_patch(preview, cfg, cx, cz, xmin, pscale, patch_x, patch_z,
+                        H, biome_str, inside, is_water):
+    Hsize, Wsize = preview.shape[:2]
     for iz in range(16):
         for ix in range(16):
             if not inside[iz, ix]:
                 continue
             wx, wz = cx * 16 + ix, cz * 16 + iz
-            px, pz = (wx - xmin) // pscale, (wz - xmin) // pscale
-            if not (0 <= px < P and 0 <= pz < P):
+            px, pz = (wx - xmin) // pscale - patch_x, (wz - xmin) // pscale - patch_z
+            if not (0 <= px < Wsize and 0 <= pz < Hsize):
                 continue
             if is_water[iz, ix]:
                 col = BIOME_COLORS["minecraft:river"]
@@ -921,3 +1107,8 @@ def _fill_preview(preview, cfg, cx, cz, xmin, pscale, H, biome_str, inside, is_w
                 int(np.clip(col[0] * (1 + shade * 0.45), 0, 255)),
                 int(np.clip(col[1] * (1 + shade * 0.45), 0, 255)),
                 int(np.clip(col[2] * (1 + shade * 0.45), 0, 255)))
+
+
+def _fill_preview(preview, cfg, cx, cz, xmin, pscale, H, biome_str, inside, is_water):
+    _fill_preview_patch(preview, cfg, cx, cz, xmin, pscale, 0, 0,
+                        H, biome_str, inside, is_water)

@@ -173,7 +173,9 @@ def progress(job_id):
         return jsonify({"error": "unknown job"}), 404
     out = {k: job.get(k) for k in ("progress", "message", "done", "error",
                                    "stats", "preview", "traceback")}
-    return jsonify(out)
+    response = jsonify(out)
+    response.headers["Cache-Control"] = "no-store, max-age=0"
+    return response
 
 
 @app.route("/download/<job_id>")

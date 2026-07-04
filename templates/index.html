@@ -356,7 +356,7 @@ $("go").onclick=async()=>{
   const job=res.job_id;
   poll=setInterval(async()=>{
     let p;
-    try{p=await(await fetch("/progress/"+job)).json();}catch(e){return;}
+    try{p=await(await fetch("/progress/"+job+"?t="+Date.now(),{cache:"no-store"})).json();}catch(e){return;}
     $("bar").style.width=Math.max(2,p.progress||0)+"%";
     if(p.message)setStatus(p.message);
     if(p.done){

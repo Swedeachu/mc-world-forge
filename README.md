@@ -42,6 +42,7 @@ from the singleplayer world list.
 ```bash
 pip install -r requirements.txt
 python cli.py --name "Valley" --size 1000 --seed 42 --out ./Valley
+python cli.py --size 1000 --workers 8 --out ./ValleyFast
 # then copy ./Valley into your saves folder
 python cli.py --help      # all options
 ```
@@ -95,7 +96,8 @@ format:
 
 - `noise.py` — seeded, vectorized value noise (no external noise lib).
 - `generator.py` — terrain height, biome/climate assignment, cave carving, ore
-  veins, trees, snow, the bedrock floor, and the border wall.
+  veins, trees, snow, the bedrock floor, the border wall, and region-level
+  multiprocessing for faster builds.
 - `region.py` — assembles 1.18+ chunk NBT (palette-based `block_states` /
   `biomes`, negative-Y sections) and packs region files.
 - `nbt.py` — a small NBT binary writer.
@@ -114,8 +116,11 @@ Terrain uses the plain `stone` / `diamond_ore` palette everywhere (even below
 
 ## Notes & limitations
 
-- A **1000×1000** world takes roughly **2–3 minutes** to build and produces about
-  **15–20 MB** of region files.
+- Generation uses multiple worker processes by default, capped at 12 workers to
+  avoid runaway memory use. Use `--workers 1` for fully serial generation or
+  `--workers N` to tune it for your CPU.
+- A **1000×1000** world produces about **15–20 MB** of region files; generation
+  time depends heavily on worker count and CPU.
 - Lighting and heightmaps are recomputed by Minecraft on first load, so the very
   first time you open the world near the edges it may relight briefly.
 - Trees are clipped at chunk borders in rare cases (cosmetic).
