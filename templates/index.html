@@ -171,7 +171,7 @@
         <div class="field"><label>Water level Y</label>
           <input type="number" id="water_level" value="62"></div>
         <div class="field"><label>Base land height Y</label>
-          <input type="number" id="base_height" value="70"></div>
+          <input type="number" id="base_height" value="71"></div>
       </div>
     </fieldset>
 
@@ -179,14 +179,14 @@
       <legend><span class="n">03</span> Terrain &amp; mountains</legend>
       <div class="grid">
         <div class="field slider"><label>Mountain amount</label>
-          <input type="range" id="mountain_amount" min="0" max="1" step="0.05" value="0.55">
-          <span class="val" id="mountain_amount_v">0.55</span></div>
+          <input type="range" id="mountain_amount" min="0" max="1" step="0.05" value="0.5">
+          <span class="val" id="mountain_amount_v">0.50</span></div>
         <div class="field"><label>Mountain height (blocks)</label>
-          <input type="number" id="mountain_amp" value="44"></div>
+          <input type="number" id="mountain_amp" value="70"></div>
         <div class="field"><label>Rolling-hill height (blocks)</label>
-          <input type="number" id="hill_amp" value="10"></div>
+          <input type="number" id="hill_amp" value="12"></div>
         <div class="field"><label>Snow line Y (snow above)</label>
-          <input type="number" id="snowline_y" value="90"></div>
+          <input type="number" id="snowline_y" value="95"></div>
       </div>
     </fieldset>
 
@@ -201,15 +201,26 @@
         <div class="field check"><input type="checkbox" id="rivers" checked>
           <label for="rivers" style="color:var(--ink)">Rivers</label></div>
         <div class="field slider"><label>River amount</label>
-          <input type="range" id="river_amount" min="0" max="1" step="0.05" value="0.5">
-          <span class="val" id="river_amount_v">0.50</span></div>
+          <input type="range" id="river_amount" min="0" max="1" step="0.05" value="0.4">
+          <span class="val" id="river_amount_v">0.40</span></div>
         <div class="field check"><input type="checkbox" id="lakes" checked>
           <label for="lakes" style="color:var(--ink)">Small lakes</label></div>
+        <div class="field slider"><label>Lake amount</label>
+          <input type="range" id="lake_amount" min="0" max="1" step="0.05" value="0.4">
+          <span class="val" id="lake_amount_v">0.40</span></div>
+        <div class="field check"><input type="checkbox" id="ravines" checked>
+          <label for="ravines" style="color:var(--ink)">Ravines &amp; cave openings</label></div>
+        <div class="field check"><input type="checkbox" id="fluids" checked>
+          <label for="fluids" style="color:var(--ink)">Underground lava &amp; water</label></div>
+        <div class="field check"><input type="checkbox" id="stone_variants" checked>
+          <label for="stone_variants" style="color:var(--ink)">Diorite / granite / andesite</label></div>
         <div class="field check"><input type="checkbox" id="trees" checked>
           <label for="trees" style="color:var(--ink)">Trees</label></div>
         <div class="field slider"><label>Tree density</label>
           <input type="range" id="tree_density" min="0" max="2" step="0.1" value="1">
           <span class="val" id="tree_density_v">1.0</span></div>
+        <div class="field check"><input type="checkbox" id="decorations" checked>
+          <label for="decorations" style="color:var(--ink)">Grass, flowers, cane &amp; cactus</label></div>
       </div>
     </fieldset>
 
@@ -231,7 +242,7 @@
       <legend><span class="n">06</span> Ore veins</legend>
       <table class="ores"><thead><tr>
         <th class="oname">Ore</th><th>Min Y</th><th>Max Y</th>
-        <th>Veins / chunk</th><th>Vein size</th><th></th>
+        <th>Veins / chunk</th><th>Vein size</th><th>Depth bias</th><th></th>
       </tr></thead><tbody id="orebody"></tbody></table>
       <button type="button" class="addore" id="addore">+ add ore</button>
     </fieldset>
@@ -266,9 +277,13 @@
 <script>
 const $=id=>document.getElementById(id);
 const DEFAULT_ORES=[
-  {name:"diamond_ore",y_min:-19,y_max:5,veins_per_chunk:8,vein_size:5},
-  {name:"coal_ore",y_min:5,y_max:110,veins_per_chunk:11,vein_size:9},
-  {name:"iron_ore",y_min:-16,y_max:66,veins_per_chunk:9,vein_size:6},
+  {name:"coal_ore",y_min:5,y_max:120,veins_per_chunk:11,vein_size:12,bias:"high"},
+  {name:"iron_ore",y_min:-19,y_max:80,veins_per_chunk:9,vein_size:8,bias:"mid"},
+  {name:"copper_ore",y_min:0,y_max:96,veins_per_chunk:6,vein_size:8,bias:"mid"},
+  {name:"gold_ore",y_min:-19,y_max:32,veins_per_chunk:3,vein_size:6,bias:"low"},
+  {name:"redstone_ore",y_min:-19,y_max:15,veins_per_chunk:7,vein_size:7,bias:"low"},
+  {name:"lapis_ore",y_min:-19,y_max:32,veins_per_chunk:2.5,vein_size:6,bias:"mid"},
+  {name:"diamond_ore",y_min:-19,y_max:8,veins_per_chunk:7,vein_size:5,bias:"low"},
 ];
 function oreRow(o){
   const tr=document.createElement("tr");
@@ -278,15 +293,18 @@ function oreRow(o){
    <td><input type="number" value="${o.y_max}" style="width:64px"></td>
    <td><input type="number" value="${o.veins_per_chunk}" step="0.5" style="width:70px"></td>
    <td><input type="number" value="${o.vein_size}" style="width:60px"></td>
+   <td><select class="obias" style="width:78px">
+     ${["uniform","low","mid","high"].map(b=>`<option value="${b}" ${b===(o.bias||"uniform")?"selected":""}>${b}</option>`).join("")}
+   </select></td>
    <td><button type="button" class="rm">✕</button></td>`;
   tr.querySelector(".rm").onclick=()=>tr.remove();
   return tr;
 }
 DEFAULT_ORES.forEach(o=>$("orebody").appendChild(oreRow(o)));
 $("addore").onclick=()=>$("orebody").appendChild(
-  oreRow({name:"redstone_ore",y_min:-19,y_max:15,veins_per_chunk:7,vein_size:6}));
+  oreRow({name:"emerald_ore",y_min:-19,y_max:80,veins_per_chunk:1,vein_size:3,bias:"high"}));
 
-["mountain_amount","cave_intensity","river_amount","tree_density"].forEach(id=>{
+["mountain_amount","cave_intensity","river_amount","lake_amount","tree_density"].forEach(id=>{
   const el=$(id),v=$(id+"_v");
   const f=()=>v.textContent=(+el.value).toFixed(2).replace(/0$/, id=="mountain_amount"?"0":"");
   el.addEventListener("input",()=>v.textContent=(+el.value).toFixed(id=="cave_intensity"||id=="tree_density"?1:2));
@@ -295,8 +313,10 @@ $("addore").onclick=()=>$("orebody").appendChild(
 function collect(){
   const ores=[...$("orebody").querySelectorAll("tr")].map(tr=>{
     const i=tr.querySelectorAll("input");
+    const sel=tr.querySelector(".obias");
     return {name:i[0].value,y_min:+i[1].value,y_max:+i[2].value,
-            veins_per_chunk:+i[3].value,vein_size:+i[4].value};
+            veins_per_chunk:+i[3].value,vein_size:+i[4].value,
+            bias:sel?sel.value:"uniform"};
   });
   return {
     name:$("name").value,size:+$("size").value,seed:+$("seed").value,
@@ -307,9 +327,12 @@ function collect(){
     mountain_amount:+$("mountain_amount").value,mountain_amp:+$("mountain_amp").value,
     hill_amp:+$("hill_amp").value,snowline_y:+$("snowline_y").value,
     caves:$("caves").checked,cave_intensity:+$("cave_intensity").value,
+    ravines:$("ravines").checked,fluids:$("fluids").checked,
+    stone_variants:$("stone_variants").checked,
     rivers:$("rivers").checked,river_amount:+$("river_amount").value,
-    lakes:$("lakes").checked,trees:$("trees").checked,
-    tree_density:+$("tree_density").value,
+    lakes:$("lakes").checked,lake_amount:+$("lake_amount").value,
+    trees:$("trees").checked,tree_density:+$("tree_density").value,
+    decorations:$("decorations").checked,
     wall:$("wall").checked,wall_min_y:+$("wall_min_y").value,
     wall_max_y:+$("wall_max_y").value,ores
   };

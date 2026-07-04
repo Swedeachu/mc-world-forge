@@ -13,10 +13,15 @@ inside Minecraft — you just drop the folder into your `saves/`.
 
 ## Quick start (web UI)
 
+**Windows (easiest):** double-click **`setup.bat`** once (creates an isolated
+environment and installs the dependencies), then double-click **`start.bat`** to
+launch the server — it opens **http://127.0.0.1:5000** in your default browser
+automatically. After the first time you only need `start.bat`.
+
 ```bash
 # macOS / Linux
 ./run.sh
-# Windows
+# Windows (alternative to the .bat files above)
 run.bat
 ```
 
@@ -53,13 +58,26 @@ python cli.py --help      # all options
   world bottom (**−64**) to the world top (**319**) with **no ceiling**. Both ends
   are configurable.
 - **Ore veins** — a table of ores, each with its own Y range, veins-per-chunk
-  rate, and vein size. Default: **very common diamond** right around **Y 5 and
-  below**, plus coal and iron.
+  rate, vein size, and a **depth bias** (cluster low / mid / high). Defaults ship
+  the full vanilla-flavoured set — **coal, iron, copper, gold, redstone, lapis,
+  and very common diamond** — placed at vanilla-like depths (diamond, redstone
+  and gold skew deep; lapis is rarest).
 - **Terrain & mountains** — hill height, mountain amount/height, and the snow line
   (snowy caps get a top snow layer).
-- **Biomes** — plains, forest, taiga, jungle, snowy plains, snowy taiga, snowy
-  mountain slopes, and river. **No oceans**; rivers and small lakes only.
-- **Caves**, **rivers**, **lakes**, **trees** — toggle and tune each.
+- **Biomes** — plains, forest, **desert**, taiga, jungle, snowy plains, snowy
+  taiga, snowy mountain slopes, beaches, and river, chosen by blended
+  temperature/humidity so zones transition naturally. Tuned roughly **half
+  plains / half forest** in the temperate band (fewer, calmer forests).
+  **No oceans**; gentle rivers and small ponds only.
+- **Natural water** — winding rivers and small lakes with **soft, gradual banks**
+  (no cliff-walled trenches), **sand/gravel beaches**, and **clay & gravel beds**.
+- **Underground variety** — **diorite / granite / andesite** pockets, dirt &
+  gravel blobs, a bottom **lava aquifer**, small **water pockets**, and **ravines
+  that open from the surface** down to the depths.
+- **Surface decoration** — scattered grass & tall grass, biome flowers, **sugar
+  cane** by water, and **cactus / dead bushes** in deserts.
+- **Caves, ravines, rivers, lakes, trees, decoration, stone variants** — toggle
+  and tune each.
 - **Target version** — 1.20.1 → 1.21.7 (worlds also open in newer versions).
 
 Every setting is reproducible: the same **seed + settings** always rebuilds the
@@ -96,7 +114,7 @@ Terrain uses the plain `stone` / `diamond_ore` palette everywhere (even below
 
 ## Notes & limitations
 
-- A **1000×1000** world takes roughly **1–2 minutes** to build and produces about
+- A **1000×1000** world takes roughly **2–3 minutes** to build and produces about
   **15–20 MB** of region files.
 - Lighting and heightmaps are recomputed by Minecraft on first load, so the very
   first time you open the world near the edges it may relight briefly.

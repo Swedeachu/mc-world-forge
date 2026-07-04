@@ -9,7 +9,7 @@ import argparse
 import os
 import sys
 
-from generator import WorldConfig, OreCfg, generate_world
+from generator import WorldConfig, generate_world, _default_ores
 
 VERSIONS = {
     "1.20.1": 3465, "1.20.2": 3578, "1.20.4": 3700, "1.20.6": 3839,
@@ -28,34 +28,40 @@ def main():
 
     ap.add_argument("--floor-y", type=int, default=-20)
     ap.add_argument("--water-level", type=int, default=62)
-    ap.add_argument("--base-height", type=int, default=70)
-    ap.add_argument("--mountain-amount", type=float, default=0.55)
-    ap.add_argument("--mountain-amp", type=float, default=44)
-    ap.add_argument("--hill-amp", type=float, default=10)
-    ap.add_argument("--snowline-y", type=int, default=90)
+    ap.add_argument("--base-height", type=int, default=71)
+    ap.add_argument("--mountain-amount", type=float, default=0.5)
+    ap.add_argument("--mountain-amp", type=float, default=70)
+    ap.add_argument("--hill-amp", type=float, default=12)
+    ap.add_argument("--snowline-y", type=int, default=95)
 
     ap.add_argument("--no-caves", action="store_true")
     ap.add_argument("--cave-intensity", type=float, default=1.0)
+    ap.add_argument("--no-ravines", action="store_true")
+    ap.add_argument("--no-fluids", action="store_true")
+    ap.add_argument("--no-stone-variants", action="store_true")
     ap.add_argument("--no-rivers", action="store_true")
-    ap.add_argument("--river-amount", type=float, default=0.5)
+    ap.add_argument("--river-amount", type=float, default=0.4)
     ap.add_argument("--no-lakes", action="store_true")
+    ap.add_argument("--lake-amount", type=float, default=0.4)
     ap.add_argument("--no-trees", action="store_true")
     ap.add_argument("--tree-density", type=float, default=1.0)
+    ap.add_argument("--no-decorations", action="store_true")
 
     ap.add_argument("--no-wall", action="store_true")
     ap.add_argument("--wall-min-y", type=int, default=-64)
     ap.add_argument("--wall-max-y", type=int, default=319)
     ap.add_argument("--creative", action="store_true")
 
-    ap.add_argument("--diamond-veins", type=float, default=8.0,
-                    help="diamond veins per chunk (y<=5). Set 0 to omit.")
+    ap.add_argument("--diamond-veins", type=float, default=None,
+                    help="override diamond veins per chunk. Set 0 to omit diamonds.")
     args = ap.parse_args()
 
-    ores = [
-        OreCfg("diamond_ore", args.floor_y + 1, 5, args.diamond_veins, 5),
-        OreCfg("coal_ore", 5, 110, 11.0, 9),
-        OreCfg("iron_ore", args.floor_y + 4, 66, 9.0, 6),
-    ]
+    # full vanilla-flavoured default ore set (coal/iron/copper/gold/redstone/lapis/diamond)
+    ores = _default_ores()
+    if args.diamond_veins is not None:
+        for o in ores:
+            if o.name == "diamond_ore":
+                o.veins_per_chunk = args.diamond_veins
     ores = [o for o in ores if o.veins_per_chunk > 0]
 
     cfg = WorldConfig(
@@ -66,9 +72,12 @@ def main():
         mountain_amp=args.mountain_amp, hill_amp=args.hill_amp,
         snowline_y=args.snowline_y,
         caves=not args.no_caves, cave_intensity=args.cave_intensity,
+        ravines=not args.no_ravines, fluids=not args.no_fluids,
+        stone_variants=not args.no_stone_variants,
         rivers=not args.no_rivers, river_amount=args.river_amount,
-        lakes=not args.no_lakes, trees=not args.no_trees,
-        tree_density=args.tree_density,
+        lakes=not args.no_lakes, lake_amount=args.lake_amount,
+        trees=not args.no_trees, tree_density=args.tree_density,
+        decorations=not args.no_decorations,
         wall=not args.no_wall, wall_min_y=args.wall_min_y,
         wall_max_y=args.wall_max_y,
         game_type=1 if args.creative else 0,
