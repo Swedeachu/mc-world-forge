@@ -12,6 +12,11 @@ import struct
 import gzip
 import zlib
 
+try:
+    import numpy as _np
+except Exception:  # pragma: no cover - numpy is a project dependency
+    _np = None
+
 # --- Tag wrapper types -------------------------------------------------------
 # Python's native int/float/str/list/dict are ambiguous about their NBT type,
 # so we wrap values in tiny marker classes. `Compound` is a plain dict subclass
@@ -124,11 +129,21 @@ def _write_payload(out: bytearray, value):
     elif isinstance(value, IntArray):
         arr = value.value
         out += struct.pack(">i", len(arr))
-        out += struct.pack(">%di" % len(arr), *[_to_signed32(int(v)) for v in arr])
+        if _np is not None and isinstance(arr, _np.ndarray):
+            out += arr.astype(">i4", copy=False).tobytes()
+        else:
+            out += struct.pack(">%di" % len(arr), *[_to_signed32(int(v)) for v in arr])
     elif isinstance(value, LongArray):
         arr = value.value
         out += struct.pack(">i", len(arr))
-        out += struct.pack(">%dq" % len(arr), *[_to_signed64(int(v)) for v in arr])
+        if _np is not None and isinstance(arr, _np.ndarray):
+            if arr.dtype == _np.uint64:
+                arr = arr.view(_np.int64)
+            else:
+                arr = arr.astype(_np.int64, copy=False)
+            out += arr.astype(">i8", copy=False).tobytes()
+        else:
+            out += struct.pack(">%dq" % len(arr), *[_to_signed64(int(v)) for v in arr])
     elif isinstance(value, String) or isinstance(value, str):
         data = str(value).encode("utf-8")
         out += struct.pack(">H", len(data))

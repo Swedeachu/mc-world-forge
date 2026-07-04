@@ -10,6 +10,7 @@ import base64
 import shutil
 import tempfile
 import threading
+import time
 import traceback
 import zipfile
 import uuid
@@ -60,6 +61,13 @@ def _build_config(form):
         except (TypeError, ValueError):
             return default
 
+    def seed_num():
+        try:
+            seed = int(form.get("seed", 0))
+        except (TypeError, ValueError):
+            seed = 0
+        return max(-(2 ** 31), min(2 ** 31 - 1, seed))
+
     version = form.get("version", "1.20.1")
     data_version = VERSIONS.get(version, 3465)
 
@@ -82,7 +90,7 @@ def _build_config(form):
     cfg = WorldConfig(
         name=_safe_name(form.get("name", "Forged World")),
         size=max(16, min(6000, int(num("size", 1000, int)))),
-        seed=int(num("seed", 0, int)),
+        seed=seed_num(),
         data_version=data_version,
         version_name=version,
         floor_y=int(num("floor_y", -20, int)),
@@ -111,20 +119,33 @@ def _build_config(form):
         allow_commands=bool(form.get("allow_commands", True)),
         ores=ores,
     )
-    return cfg
+    workers = int(num("workers", 0, int))
+    workers = max(0, min(64, workers))
+    return cfg, workers
 
 
-def _run_job(job_id, cfg):
+def _run_job(job_id, cfg, workers):
     job = JOBS[job_id]
     out_dir = os.path.join(WORKROOT, job_id, _safe_name(cfg.name))
     os.makedirs(out_dir, exist_ok=True)
+
+    last_preview = [0.0]
 
     def progress(p, msg):
         job["progress"] = round(p * 100, 1)
         job["message"] = msg
 
+    def preview_progress(arr):
+        now = time.time()
+        if now - last_preview[0] < 0.50 and not job.get("done"):
+            return
+        job["preview"] = _preview_png_b64(arr)
+        last_preview[0] = now
+
     try:
-        res = generate_world(cfg, out_dir, progress)
+        res = generate_world(cfg, out_dir, progress,
+                             workers=workers or None,
+                             preview_progress=preview_progress)
         job["progress"] = 99.0
         job["message"] = "Zipping world..."
         zip_path = os.path.join(WORKROOT, job_id, f"{_safe_name(cfg.name)}.zip")
@@ -149,18 +170,19 @@ def _run_job(job_id, cfg):
 
 @app.route("/")
 def index():
-    return render_template("index.html", versions=list(VERSIONS.keys()))
+    return render_template("index.html", versions=list(VERSIONS.keys()),
+                           cpu_count=os.cpu_count() or 1)
 
 
 @app.route("/generate", methods=["POST"])
 def generate():
     form = request.get_json(force=True)
-    cfg = _build_config(form)
+    cfg, workers = _build_config(form)
     job_id = uuid.uuid4().hex
     with JOBS_LOCK:
         JOBS[job_id] = {"progress": 0.0, "message": "Queued", "done": False,
                         "error": None}
-    t = threading.Thread(target=_run_job, args=(job_id, cfg), daemon=True)
+    t = threading.Thread(target=_run_job, args=(job_id, cfg, workers), daemon=True)
     t.start()
     est = cfg.size * cfg.size
     return jsonify({"job_id": job_id, "estimate_blocks": est})
@@ -174,7 +196,8 @@ def progress(job_id):
     out = {k: job.get(k) for k in ("progress", "message", "done", "error",
                                    "stats", "preview", "traceback")}
     response = jsonify(out)
-    response.headers["Cache-Control"] = "no-store, max-age=0"
+    response.headers["Cache-Control"] = "no-store, no-cache, max-age=0"
+    response.headers["Pragma"] = "no-cache"
     return response
 
 

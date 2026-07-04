@@ -52,7 +52,7 @@ def main():
     ap.add_argument("--wall-max-y", type=int, default=319)
     ap.add_argument("--creative", action="store_true")
     ap.add_argument("--workers", type=int, default=None,
-                    help="generation worker processes. Default uses up to 12 CPU cores.")
+                    help="generation worker processes. Default auto-detects CPU threads; 1 forces serial generation.")
 
     ap.add_argument("--diamond-veins", type=float, default=None,
                     help="override diamond veins per chunk. Set 0 to omit diamonds.")

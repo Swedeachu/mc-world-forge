@@ -44,6 +44,11 @@
   .field{display:flex;flex-direction:column;gap:5px;min-width:0}
   .field label{font-size:12px;color:var(--muted)}
   .field .hint{font-size:11px;color:var(--faint);font-family:var(--mono)}
+  .seedrow{display:grid;grid-template-columns:1fr auto;gap:7px;align-items:center}
+  .smallbtn{background:#0c0f13;border:1px solid var(--line);color:var(--ore);
+    border-radius:7px;padding:9px 11px;cursor:pointer;font-family:var(--mono);
+    font-size:12px;white-space:nowrap}
+  .smallbtn:hover{border-color:var(--ore);filter:brightness(1.1)}
   input[type=text],input[type=number],select{
     width:100%;background:#0c0f13;border:1px solid var(--line);color:var(--ink);
     border-radius:7px;padding:9px 10px;font-family:var(--mono);font-size:13px}
@@ -81,10 +86,13 @@
     text-transform:uppercase;color:var(--muted)}
   .plate .head .st{color:var(--grass)}
   .mapbox{position:relative;aspect-ratio:1;background:
-    radial-gradient(circle at 50% 50%,#12171d,#0b0e12);display:flex;
-    align-items:center;justify-content:center}
-  .mapbox img{width:100%;height:100%;object-fit:contain;image-rendering:pixelated;
-    display:none}
+    radial-gradient(circle at 50% 50%,#1d1b14,#0b0e12);display:flex;
+    align-items:center;justify-content:center;overflow:hidden}
+  .mapbox:after{content:"";position:absolute;inset:11px;border:1px solid rgba(247,233,163,.16);
+    box-shadow:inset 0 0 0 1px rgba(0,0,0,.22);pointer-events:none}
+  .mapbox img{width:calc(100% - 22px);height:calc(100% - 22px);object-fit:contain;
+    image-rendering:pixelated;display:none;background:#776b43;
+    box-shadow:0 0 0 3px rgba(247,233,163,.17),0 14px 35px rgba(0,0,0,.35)}
   .crosshair{position:absolute;inset:0;pointer-events:none}
   .crosshair:before,.crosshair:after{content:"";position:absolute;background:rgba(87,214,221,.35)}
   .crosshair:before{left:50%;top:0;bottom:0;width:1px;transform:translateX(-.5px)}
@@ -143,7 +151,8 @@
         <div class="field"><label>World name</label>
           <input type="text" id="name" value="Forged World"></div>
         <div class="field"><label>Seed</label>
-          <input type="number" id="seed" value="0">
+          <div class="seedrow"><input type="number" id="seed" value="0">
+            <button type="button" class="smallbtn" id="random_seed">randomize</button></div>
           <span class="hint">same seed + settings → same world</span></div>
         <div class="field"><label>Width &amp; length (blocks, square)</label>
           <input type="number" id="size" value="1000" min="16" max="6000" step="16">
@@ -156,6 +165,9 @@
         <div class="field"><label>Starting mode</label>
           <select id="game_type"><option value="0">Survival</option>
             <option value="1">Creative</option></select></div>
+        <div class="field"><label>Worker processes</label>
+          <input type="number" id="workers" value="0" min="0" max="64" step="1">
+          <span class="hint">0 = auto ({{cpu_count}} CPU threads detected); raise manually to crunch harder</span></div>
         <div class="field check" style="align-self:end">
           <input type="checkbox" id="allow_commands" checked>
           <label for="allow_commands" style="color:var(--ink)">Allow cheats / commands</label></div>
@@ -303,6 +315,11 @@ function oreRow(o){
 DEFAULT_ORES.forEach(o=>$("orebody").appendChild(oreRow(o)));
 $("addore").onclick=()=>$("orebody").appendChild(
   oreRow({name:"emerald_ore",y_min:-19,y_max:80,veins_per_chunk:1,vein_size:3,bias:"high"}));
+$("random_seed").onclick=()=>{
+  const bytes=new Uint32Array(1);
+  crypto.getRandomValues(bytes);
+  $("seed").value=(bytes[0]|0).toString();
+};
 
 ["mountain_amount","cave_intensity","river_amount","lake_amount","tree_density"].forEach(id=>{
   const el=$(id),v=$(id+"_v");
@@ -320,7 +337,7 @@ function collect(){
   });
   return {
     name:$("name").value,size:+$("size").value,seed:+$("seed").value,
-    version:$("version").value,game_type:+$("game_type").value,
+    version:$("version").value,game_type:+$("game_type").value,workers:+$("workers").value,
     allow_commands:$("allow_commands").checked,
     floor_y:+$("floor_y").value,water_level:+$("water_level").value,
     base_height:+$("base_height").value,
@@ -346,6 +363,8 @@ $("go").onclick=async()=>{
   $("go").disabled=true;$("err").style.display="none";
   $("stats").style.display="none";$("dl").style.display="none";
   $("progress").style.display="block";$("bar").style.width="2%";
+  const img=$("mapimg");img.removeAttribute("src");img.style.display="none";
+  $("ph").style.display="block";$("origin").style.display="none";
   $("plate_st").textContent="forging";
   setStatus("Sending job…");
   let res;
@@ -359,11 +378,18 @@ $("go").onclick=async()=>{
     try{p=await(await fetch("/progress/"+job+"?t="+Date.now(),{cache:"no-store"})).json();}catch(e){return;}
     $("bar").style.width=Math.max(2,p.progress||0)+"%";
     if(p.message)setStatus(p.message);
+    if(p.preview){
+      const img=$("mapimg");
+      if(img.src!==p.preview)img.src=p.preview;
+      img.style.display="block";
+      $("ph").style.display="none";$("origin").style.display="block";
+      if(!p.done)$("plate_st").textContent="mapping";
+    }
     if(p.done){
       clearInterval(poll);$("go").disabled=false;
       if(p.error){fail(p.error+"\n\n"+(p.traceback||""));return;}
       $("plate_st").textContent="mapped";
-      const img=$("mapimg");img.src=p.preview;img.style.display="block";
+      const img=$("mapimg");if(p.preview)img.src=p.preview;img.style.display="block";
       $("ph").style.display="none";$("origin").style.display="block";
       showStats(p.stats);
       const dl=$("dl");dl.href="/download/"+job;dl.style.display="block";
@@ -384,6 +410,7 @@ function showStats(s){
   box.innerHTML=`
    <div><span>chunks generated</span><b>${s.chunks}</b></div>
    <div><span>region files</span><b>${s.regions}</b></div>
+   <div><span>workers / mode</span><b>${s.workers} / ${s.job_mode||"region"}</b></div>
    <div><span>world bounds (x,z)</span><b>${x0} … ${x1}</b></div>
    <div><span>spawn</span><b>${s.spawn.join(" / ")}</b></div>
    <div><span>build time</span><b>${s.seconds}s</b></div>`;

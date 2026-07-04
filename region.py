@@ -41,7 +41,7 @@ def pack_indices(indices, bits: int):
     b = np.uint64(bits)
     for j in range(epl):
         out |= grid[:, j] << (np.uint64(j) * b)
-    return [int(v) for v in out]
+    return out.view(np.int64)
 
 
 # ---------------------------------------------------------------------------
@@ -167,9 +167,12 @@ class RegionWriter:
         self.chunks = {}   # (local_x, local_z) -> compressed bytes (scheme 2)
 
     def add_chunk(self, chunk_x, chunk_z, root_compound):
+        payload = nbt.to_zlib("", root_compound)
+        self.add_compressed_chunk(chunk_x, chunk_z, payload)
+
+    def add_compressed_chunk(self, chunk_x, chunk_z, payload):
         lx = chunk_x & 31
         lz = chunk_z & 31
-        payload = nbt.to_zlib("", root_compound)
         self.chunks[(lx, lz)] = payload
 
     def to_bytes(self) -> bytes:

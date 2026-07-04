@@ -43,6 +43,7 @@ from the singleplayer world list.
 pip install -r requirements.txt
 python cli.py --name "Valley" --size 1000 --seed 42 --out ./Valley
 python cli.py --size 1000 --workers 8 --out ./ValleyFast
+python cli.py --size 512 --workers 16 --out ./TinyCrunch   # uses tiled jobs when useful
 # then copy ./Valley into your saves folder
 python cli.py --help      # all options
 ```
@@ -96,8 +97,9 @@ format:
 
 - `noise.py` — seeded, vectorized value noise (no external noise lib).
 - `generator.py` — terrain height, biome/climate assignment, cave carving, ore
-  veins, trees, snow, the bedrock floor, the border wall, and region-level
-  multiprocessing for faster builds.
+  veins, trees, snow, the bedrock floor, the border wall, region-level
+  multiprocessing, and tiled jobs for small worlds or manually high worker
+  counts.
 - `region.py` — assembles 1.18+ chunk NBT (palette-based `block_states` /
   `biomes`, negative-Y sections) and packs region files.
 - `nbt.py` — a small NBT binary writer.
@@ -116,9 +118,13 @@ Terrain uses the plain `stone` / `diamond_ore` palette everywhere (even below
 
 ## Notes & limitations
 
-- Generation uses multiple worker processes by default, capped at 12 workers to
-  avoid runaway memory use. Use `--workers 1` for fully serial generation or
-  `--workers N` to tune it for your CPU.
+- Generation uses multiple worker processes by default. Auto mode uses your CPU
+  thread count; use `--workers 1` for fully serial generation or `--workers N`
+  to manually push harder. Region jobs write `.mca` files directly from workers;
+  when there are fewer region jobs than requested workers, the generator switches
+  to smaller tiled jobs so extra cores can still do useful work.
+- The web preview updates while generation is running. Its colours are quantized
+  to a Minecraft map-style palette rather than the older smooth biome preview.
 - A **1000×1000** world produces about **15–20 MB** of region files; generation
   time depends heavily on worker count and CPU.
 - Lighting and heightmaps are recomputed by Minecraft on first load, so the very
