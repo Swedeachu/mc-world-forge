@@ -62,12 +62,14 @@ def _block_state_tag(state):
 
 
 def build_chunk(cx, cz, block_ids, biome_ids, block_palette, biome_palette,
-                data_version, min_section, n_sections):
+                data_version, min_section, n_sections, block_entities=None):
     """
     block_ids : int16 ndarray (world_height, 16, 16) indexed [y, z, x] holding
                 global ids into `block_palette` (list of (name, props)).
     biome_ids : int16 ndarray (16, 16) indexed [z, x] holding global ids into
                 `biome_palette` (list of biome name strings). Horizontal only.
+    block_entities : optional list of nbt.Compound tags (e.g. chests). Each must
+                carry its own absolute x/y/z. Written verbatim into the chunk.
     """
     world_height = block_ids.shape[0]
     min_y = min_section * 16
@@ -140,7 +142,10 @@ def build_chunk(cx, cz, block_ids, biome_ids, block_palette, biome_palette,
     root["LastUpdate"] = nbt.Long(0)
     root["InhabitedTime"] = nbt.Long(0)
     root["sections"] = nbt.List(nbt.Compound.tag_id, sections)
-    root["block_entities"] = empty_list
+    if block_entities:
+        root["block_entities"] = nbt.List(nbt.Compound.tag_id, block_entities)
+    else:
+        root["block_entities"] = empty_list
     root["block_ticks"] = empty_list
     root["fluid_ticks"] = empty_list
     root["PostProcessing"] = nbt.List(nbt.List.tag_id,

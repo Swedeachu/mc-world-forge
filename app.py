@@ -6,6 +6,7 @@ Run:  python app.py   then open http://127.0.0.1:5000
 import io
 import os
 import re
+import json
 import base64
 import shutil
 import tempfile
@@ -19,6 +20,10 @@ from flask import Flask, request, jsonify, send_file, render_template
 from PIL import Image
 
 from generator import WorldConfig, OreCfg, generate_world
+from skywars_generator import (
+    SkywarsConfig, SkyOre, BatchEntry, generate_skywars_world,
+    _default_ores as _sky_default_ores,
+)
 
 app = Flask(__name__)
 
@@ -124,11 +129,141 @@ def _build_config(form):
     return cfg, workers
 
 
-def _run_job(job_id, cfg, workers):
-    job = JOBS[job_id]
-    out_dir = os.path.join(WORKROOT, job_id, _safe_name(cfg.name))
-    os.makedirs(out_dir, exist_ok=True)
+def _build_skywars_config(form):
+    def num(key, default, cast=float):
+        try:
+            return cast(form.get(key, default))
+        except (TypeError, ValueError):
+            return default
 
+    def seed_num():
+        try:
+            seed = int(form.get("seed", 0))
+        except (TypeError, ValueError):
+            seed = 0
+        return max(-(2 ** 31), min(2 ** 31 - 1, seed))
+
+    version = form.get("version", "1.20.1")
+    data_version = VERSIONS.get(version, 3465)
+
+    batches = []
+    for b in form.get("batches", []):
+        try:
+            spawn = max(2, min(128, int(b.get("spawn_islands", 12))))
+            count = max(0, min(200, int(b.get("count", 1))))
+            if count > 0:
+                batches.append(BatchEntry(spawn_islands=spawn, count=count))
+        except (TypeError, ValueError):
+            continue
+    if not batches:
+        batches = [BatchEntry(12, 1)]
+
+    ores = []
+    for o in form.get("ores", []):
+        try:
+            name = str(o.get("name", "")).strip()
+            ratio = float(o.get("ratio", 0))
+            if name and ratio > 0:
+                ores.append(SkyOre(name=name, ratio=ratio))
+        except (TypeError, ValueError):
+            continue
+    if not ores:
+        ores = _sky_default_ores()
+
+    cfg = SkywarsConfig(
+        name=_safe_name(form.get("name", "Skywars")),
+        seed=seed_num(),
+        data_version=data_version,
+        version_name=version,
+        game_type=int(num("game_type", 0, int)),
+        allow_commands=bool(form.get("allow_commands", True)),
+        batches=batches,
+        main_size=max(8, min(200, int(num("main_size", 73, int)))),
+        middle_size=max(6, min(140, int(num("middle_size", 36, int)))),
+        spawn_size=max(5, min(120, int(num("spawn_size", 26, int)))),
+        island_gap=max(4, min(60, int(num("island_gap", 16, int)))),
+        middle_ratio=max(0.2, min(1.0, num("middle_ratio", 1.0))),
+        base_y=int(num("base_y", 90, int)),
+        height_jitter=max(0, min(40, int(num("height_jitter", 0, int)))),
+        surface_relief=max(0.0, min(8.0, num("surface_relief", 1.0))),
+        cluster_spacing=max(200, min(6000, int(num("cluster_spacing", 240, int)))),
+        varied_biomes=bool(form.get("varied_biomes", True)),
+        tree_density=max(0.0, num("tree_density", 1.0)),
+        rock_density=max(0.0, num("rock_density", 1.0)),
+        foliage_density=max(0.0, num("foliage_density", 1.0)),
+        ore_density=max(0.0, num("ore_density", 1.0)),
+        surface_ore=max(0.0, num("surface_ore", 1.0)),
+        ores=ores,
+        chests_per_spawn=max(0, min(120, int(num("chests_per_spawn", 15, int)))),
+        chests_per_middle=max(0, min(120, int(num("chests_per_middle", 10, int)))),
+        ender_chests_main=max(0, min(200, int(num("ender_chests_main", 25, int)))),
+    )
+    workers = int(num("workers", 0, int))
+    workers = max(0, min(64, workers))
+    return cfg, workers
+
+
+def _zip_job(job_base, zip_path):
+    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
+        for root, _, files in os.walk(job_base):
+            for fn in files:
+                full = os.path.join(root, fn)
+                if os.path.abspath(full) == os.path.abspath(zip_path):
+                    continue
+                arc = os.path.relpath(full, job_base)
+                zf.write(full, arc)
+
+
+def _run_vanilla_job(job, job_id, cfg, workers, progress, preview_progress):
+    job_base = os.path.join(WORKROOT, job_id)
+    out_dir = os.path.join(job_base, _safe_name(cfg.name))
+    os.makedirs(out_dir, exist_ok=True)
+    res = generate_world(cfg, out_dir, progress,
+                         workers=workers or None,
+                         preview_progress=preview_progress)
+    job["progress"] = 99.0
+    job["message"] = "Zipping world..."
+    zip_path = os.path.join(WORKROOT, job_id + ".zip")
+    _zip_job(job_base, zip_path)
+    job["zip_path"] = zip_path
+    job["download_name"] = _safe_name(cfg.name) + ".zip"
+    job["preview"] = _preview_png_b64(res["preview"])
+    job["stats"] = {k: v for k, v in res.items() if k != "preview"}
+
+
+def _run_skywars_job(job, job_id, cfg, workers, progress, preview_progress):
+    job_base = os.path.join(WORKROOT, job_id)
+    out_dir = os.path.join(job_base, _safe_name(cfg.name))
+    os.makedirs(out_dir, exist_ok=True)
+    res = generate_skywars_world(cfg, out_dir, progress,
+                                 workers=workers or None,
+                                 preview_progress=preview_progress)
+    job["progress"] = 98.0
+    job["message"] = "Writing positions JSON..."
+    positions = res.pop("positions", [])
+    pos_dir = os.path.join(job_base, "positions")
+    os.makedirs(pos_dir, exist_ok=True)
+    for p in positions:
+        fn = re.sub(r"[^A-Za-z0-9_\-]", "", p.get("label", "cluster")) + ".json"
+        with open(os.path.join(pos_dir, fn), "w", encoding="utf-8") as fp:
+            json.dump(p, fp, indent=2)
+    with open(os.path.join(pos_dir, "positions.json"), "w", encoding="utf-8") as fp:
+        json.dump({"world": _safe_name(cfg.name),
+                   "cluster_count": len(positions),
+                   "clusters": positions}, fp, indent=2)
+
+    job["progress"] = 99.0
+    job["message"] = "Zipping world..."
+    zip_path = os.path.join(WORKROOT, job_id + ".zip")
+    _zip_job(job_base, zip_path)
+    job["zip_path"] = zip_path
+    job["download_name"] = _safe_name(cfg.name) + ".zip"
+    job["preview"] = _preview_png_b64(res["preview"])
+    job["stats"] = {k: v for k, v in res.items() if k != "preview"}
+
+
+def _run_job(job_id, generator, cfg, workers):
+    job = JOBS[job_id]
     last_preview = [0.0]
 
     def progress(p, msg):
@@ -143,22 +278,10 @@ def _run_job(job_id, cfg, workers):
         last_preview[0] = now
 
     try:
-        res = generate_world(cfg, out_dir, progress,
-                             workers=workers or None,
-                             preview_progress=preview_progress)
-        job["progress"] = 99.0
-        job["message"] = "Zipping world..."
-        zip_path = os.path.join(WORKROOT, job_id, f"{_safe_name(cfg.name)}.zip")
-        base = os.path.join(WORKROOT, job_id)
-        with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
-            for root, _, files in os.walk(out_dir):
-                for fn in files:
-                    full = os.path.join(root, fn)
-                    arc = os.path.relpath(full, base)
-                    zf.write(full, arc)
-        job["zip_path"] = zip_path
-        job["preview"] = _preview_png_b64(res["preview"])
-        job["stats"] = {k: v for k, v in res.items() if k != "preview"}
+        if generator == "skywars":
+            _run_skywars_job(job, job_id, cfg, workers, progress, preview_progress)
+        else:
+            _run_vanilla_job(job, job_id, cfg, workers, progress, preview_progress)
         job["progress"] = 100.0
         job["message"] = "Done"
         job["done"] = True
@@ -177,15 +300,20 @@ def index():
 @app.route("/generate", methods=["POST"])
 def generate():
     form = request.get_json(force=True)
-    cfg, workers = _build_config(form)
+    generator = str(form.get("generator", "vanilla")).strip().lower()
+    if generator == "skywars":
+        cfg, workers = _build_skywars_config(form)
+    else:
+        generator = "vanilla"
+        cfg, workers = _build_config(form)
     job_id = uuid.uuid4().hex
     with JOBS_LOCK:
         JOBS[job_id] = {"progress": 0.0, "message": "Queued", "done": False,
-                        "error": None}
-    t = threading.Thread(target=_run_job, args=(job_id, cfg, workers), daemon=True)
+                        "error": None, "generator": generator}
+    t = threading.Thread(target=_run_job, args=(job_id, generator, cfg, workers),
+                         daemon=True)
     t.start()
-    est = cfg.size * cfg.size
-    return jsonify({"job_id": job_id, "estimate_blocks": est})
+    return jsonify({"job_id": job_id, "generator": generator})
 
 
 @app.route("/progress/<job_id>")
@@ -207,7 +335,7 @@ def download(job_id):
     if not job or not job.get("zip_path"):
         return "Not ready", 404
     return send_file(job["zip_path"], as_attachment=True,
-                     download_name=os.path.basename(job["zip_path"]))
+                     download_name=job.get("download_name") or os.path.basename(job["zip_path"]))
 
 
 if __name__ == "__main__":

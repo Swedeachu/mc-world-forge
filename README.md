@@ -7,6 +7,12 @@ land biomes — centered on `(0, 0)` and sealed inside a bedrock box.
 It writes real region files (`.mca`) directly, so there's nothing to install
 inside Minecraft — you just drop the folder into your `saves/`.
 
+The web UI has two generators, switchable from the toggle in the header:
+
+- **Vanilla** — the finite, bedrock-walled overworld described below.
+- **Skywars** — procedural floating-island PvP maps in a void world (see
+  [Skywars generator](#skywars-generator)).
+
 ![what it makes](preview_example.png)
 
 ---
@@ -86,6 +92,46 @@ python cli.py --help      # all options
 
 Every setting is reproducible: the same **seed + settings** always rebuilds the
 exact same world.
+
+---
+
+## Skywars generator
+
+Pick **Skywars** in the header toggle to build floating-island PvP maps in a
+pure **void** world instead. Each **cluster** is one big central island (with
+**ender chests** scattered on top), a ring of medium "middle" islands around it,
+and an outer ring of **spawn islands** (regular chests). Islands are **flat on
+top** for PvP and taper to a spiky underside, carry **varied biomes /
+temperatures**, occasional **trees, rocks and light foliage**, and **ores both
+on the surface and buried in the stone**.
+
+- **Map size** — the number of spawn islands per cluster (default **12**, scales
+  up past **64**). The middle-ring count derives from it.
+- **Batches** — generate many clusters into one world at once (e.g. *10 clusters
+  of 24 spawn islands + 10 of 12 + 10 of 32*). Clusters are placed on a padded
+  grid, always **≥200 blocks apart**.
+- **Ores** — a table of ores each with a configurable **ratio** (relative
+  frequency), plus overall density and surface-exposure sliders.
+- **Islands** — main / middle / spawn radii, ring gap, base height and per-island
+  height variation, and the middle-ring amount.
+- **Chests** — counts per spawn island, per middle island, and ender chests on
+  the central island.
+
+Every cluster writes its own labelled **positions JSON** (a spawn point for each
+spawn island plus the central island's midpoint) into a `positions/` folder, and
+the download bundles the world **and** those JSONs in one `.zip`:
+
+```
+Skywars.zip
+├── Skywars/                 ← the world save (level.dat, region/*.mca)
+└── positions/
+    ├── cluster_00_24islands.json
+    ├── cluster_01_12islands.json
+    └── positions.json       ← combined index of every cluster
+```
+
+`skywars_generator.py` is self-contained (it only shares `region.py` / `nbt.py`)
+so it never touches the vanilla `generator.py`.
 
 ---
 

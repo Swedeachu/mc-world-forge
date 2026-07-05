@@ -6,288 +6,471 @@
 <title>World Forge — Minecraft world generator</title>
 <style>
   :root{
-    --bg:#0f1216; --plate:#161b21; --panel:#1a2027; --line:#28313c;
-    --ink:#e9eef3; --muted:#8695a5; --faint:#5d6b7a;
-    --grass:#74c256; --diamond:#57d6dd; --ore:#e2b551; --bedrock:#3a4653;
-    --danger:#e0715e;
+    --bg:#0b0e13; --bg2:#0e131a; --card:#141a22; --card2:#171e28;
+    --line:#222c38; --line2:#2c3846;
+    --ink:#eef3f8; --muted:#93a2b4; --faint:#5f6f80;
+    --grass:#6fd06a; --diamond:#54d6de; --gold:#f2c14e; --iron:#d7c2a8;
+    --emerald:#37c98a; --danger:#ec6a55; --violet:#9d8cff;
     --mono:ui-monospace,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
     --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --shadow:0 18px 40px rgba(0,0,0,.45);
   }
   *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);
-    font-size:14px;line-height:1.5;
-    background-image:linear-gradient(var(--line) 1px,transparent 1px),
-      linear-gradient(90deg,var(--line) 1px,transparent 1px);
-    background-size:44px 44px;background-position:center;}
-  .masthead{border-bottom:1px solid var(--line);background:rgba(15,18,22,.85);
-    backdrop-filter:blur(4px);position:sticky;top:0;z-index:5}
-  .masthead .row{max-width:1200px;margin:0 auto;padding:16px 24px;
-    display:flex;align-items:baseline;gap:16px}
-  .brand{font-family:var(--mono);font-weight:600;letter-spacing:.08em;
-    font-size:16px;text-transform:uppercase}
-  .brand b{color:var(--grass)}
-  .tag{font-family:var(--mono);color:var(--faint);font-size:12px}
-  .coord{margin-left:auto;font-family:var(--mono);color:var(--diamond);font-size:12px}
+  html,body{margin:0}
+  body{background:var(--bg);color:var(--ink);font-family:var(--sans);
+    font-size:14px;line-height:1.55;
+    background-image:
+      radial-gradient(1200px 600px at 80% -10%,rgba(84,214,222,.06),transparent 60%),
+      radial-gradient(900px 500px at 0% 10%,rgba(111,208,106,.05),transparent 55%);
+    background-attachment:fixed;}
 
-  .wrap{max-width:1200px;margin:0 auto;padding:24px;display:grid;
-    grid-template-columns:1fr 420px;gap:24px;align-items:start}
-  @media(max-width:920px){.wrap{grid-template-columns:1fr}}
+  /* ---------- top bar ---------- */
+  .top{position:sticky;top:0;z-index:20;border-bottom:1px solid var(--line);
+    background:rgba(11,14,19,.82);backdrop-filter:blur(10px)}
+  .top .row{max-width:1280px;margin:0 auto;padding:14px 26px;display:flex;
+    align-items:center;gap:18px}
+  .brand{display:flex;align-items:center;gap:11px;font-weight:700;letter-spacing:.02em;
+    font-size:17px}
+  .brand .logo{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;
+    background:linear-gradient(145deg,var(--grass),#3f9d59);color:#04140a;font-size:18px;
+    box-shadow:0 6px 16px rgba(111,208,106,.28)}
+  .brand small{display:block;font-size:11px;font-weight:500;color:var(--faint);
+    font-family:var(--mono);letter-spacing:.03em}
 
-  fieldset{border:1px solid var(--line);border-radius:10px;margin:0 0 18px;
-    padding:16px 18px 18px;background:linear-gradient(180deg,rgba(255,255,255,.015),transparent)}
-  legend{font-family:var(--mono);font-size:11px;letter-spacing:.14em;
-    text-transform:uppercase;color:var(--muted);padding:0 8px}
-  legend .n{color:var(--grass)}
+  /* segmented generator switch */
+  .seg{margin-left:auto;display:flex;gap:4px;background:#0b0f15;border:1px solid var(--line);
+    padding:4px;border-radius:12px}
+  .seg button{appearance:none;border:none;background:none;color:var(--muted);
+    font-family:var(--sans);font-weight:600;font-size:13px;padding:8px 16px;border-radius:9px;
+    cursor:pointer;display:flex;align-items:center;gap:8px;transition:.15s}
+  .seg button .dot{width:8px;height:8px;border-radius:50%;background:currentColor;opacity:.6}
+  .seg button:hover{color:var(--ink)}
+  .seg button.on{color:#06120b;background:var(--grass);box-shadow:0 4px 14px rgba(111,208,106,.3)}
+  .seg button.on.sky{color:#061622;background:var(--diamond);box-shadow:0 4px 14px rgba(84,214,222,.32)}
 
-  .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px 18px}
+  /* ---------- layout ---------- */
+  .wrap{max-width:1280px;margin:0 auto;padding:26px;display:grid;
+    grid-template-columns:1fr 400px;gap:26px;align-items:start}
+  @media(max-width:1000px){.wrap{grid-template-columns:1fr}}
+
+  .card{border:1px solid var(--line);border-radius:16px;background:var(--card);
+    margin:0 0 20px;overflow:hidden;box-shadow:0 1px 0 rgba(255,255,255,.02) inset}
+  .card > .hd{display:flex;align-items:center;gap:12px;padding:15px 20px;
+    border-bottom:1px solid var(--line);background:linear-gradient(180deg,rgba(255,255,255,.02),transparent)}
+  .card > .hd .ix{font-family:var(--mono);font-size:12px;color:var(--faint);
+    background:#0b0f15;border:1px solid var(--line);border-radius:7px;padding:3px 8px}
+  .card > .hd h3{margin:0;font-size:14.5px;font-weight:650;letter-spacing:.01em}
+  .card > .hd p{margin:0;font-size:12px;color:var(--faint)}
+  .card > .bd{padding:18px 20px 20px}
+
+  .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:15px 18px}
   .grid.three{grid-template-columns:repeat(3,1fr)}
-  .field{display:flex;flex-direction:column;gap:5px;min-width:0}
-  .field label{font-size:12px;color:var(--muted)}
+  @media(max-width:560px){.grid,.grid.three{grid-template-columns:1fr}}
+  .field{display:flex;flex-direction:column;gap:6px;min-width:0}
+  .field > label{font-size:12px;color:var(--muted);font-weight:500}
   .field .hint{font-size:11px;color:var(--faint);font-family:var(--mono)}
-  .seedrow{display:grid;grid-template-columns:1fr auto;gap:7px;align-items:center}
-  .smallbtn{background:#0c0f13;border:1px solid var(--line);color:var(--ore);
-    border-radius:7px;padding:9px 11px;cursor:pointer;font-family:var(--mono);
-    font-size:12px;white-space:nowrap}
-  .smallbtn:hover{border-color:var(--ore);filter:brightness(1.1)}
+  .seedrow{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center}
+
   input[type=text],input[type=number],select{
-    width:100%;background:#0c0f13;border:1px solid var(--line);color:var(--ink);
-    border-radius:7px;padding:9px 10px;font-family:var(--mono);font-size:13px}
-  input:focus,select:focus{outline:2px solid var(--diamond);outline-offset:-1px;
-    border-color:var(--diamond)}
-  .check{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--ink);
-    padding-top:2px}
-  .check input{width:16px;height:16px;accent-color:var(--grass)}
-  .slider{display:flex;flex-direction:column;gap:5px}
-  .slider input[type=range]{width:100%;accent-color:var(--ore)}
-  .slider .val{font-family:var(--mono);color:var(--ore);font-size:12px}
+    width:100%;background:#0a0e13;border:1px solid var(--line2);color:var(--ink);
+    border-radius:9px;padding:10px 11px;font-family:var(--mono);font-size:13px;transition:.12s}
+  input:focus,select:focus{outline:none;border-color:var(--diamond);
+    box-shadow:0 0 0 3px rgba(84,214,222,.15)}
+  select{cursor:pointer}
+  .btn-ghost{background:#0a0e13;border:1px solid var(--line2);color:var(--gold);
+    border-radius:9px;padding:10px 12px;cursor:pointer;font-family:var(--mono);
+    font-size:12px;white-space:nowrap;transition:.12s}
+  .btn-ghost:hover{border-color:var(--gold);background:#12100a}
 
-  /* ore table */
-  table.ores{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:12px}
-  table.ores th{color:var(--faint);font-weight:500;text-align:left;padding:4px 6px;
-    font-size:10px;letter-spacing:.08em;text-transform:uppercase}
-  table.ores td{padding:3px 4px}
-  table.ores input{padding:6px 7px}
-  .oname{width:130px}
-  .rm{background:none;border:1px solid var(--line);color:var(--danger);
-    border-radius:6px;cursor:pointer;padding:6px 9px;font-family:var(--mono)}
-  .rm:hover{border-color:var(--danger)}
-  .addore{margin-top:10px;background:none;border:1px dashed var(--line);
-    color:var(--muted);border-radius:7px;padding:8px 12px;cursor:pointer;
-    font-family:var(--mono);font-size:12px}
-  .addore:hover{border-color:var(--grass);color:var(--grass)}
+  .check{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--ink);
+    padding:8px 0;user-select:none}
+  .check input{width:17px;height:17px;accent-color:var(--grass);cursor:pointer}
+  .check label{cursor:pointer}
 
-  /* right rail: the plate */
-  .rail{position:sticky;top:88px}
-  .plate{border:1px solid var(--line);border-radius:12px;background:var(--plate);
-    overflow:hidden}
-  .plate .head{display:flex;justify-content:space-between;align-items:center;
-    padding:12px 14px;border-bottom:1px solid var(--line);
-    font-family:var(--mono);font-size:11px;letter-spacing:.12em;
-    text-transform:uppercase;color:var(--muted)}
-  .plate .head .st{color:var(--grass)}
+  .slider{gap:8px}
+  .slider .top{position:static;background:none;border:none;padding:0;display:flex;
+    justify-content:space-between;align-items:baseline}
+  .slider .val{font-family:var(--mono);color:var(--gold);font-size:12px;font-weight:600}
+  input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:5px;
+    border-radius:5px;background:#0a0e13;border:1px solid var(--line2);outline:none;cursor:pointer}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;
+    border-radius:50%;background:var(--gold);border:2px solid #1a1305;cursor:pointer;
+    box-shadow:0 2px 6px rgba(0,0,0,.4)}
+  input[type=range]::-moz-range-thumb{width:16px;height:16px;border-radius:50%;
+    background:var(--gold);border:2px solid #1a1305;cursor:pointer}
+
+  /* tables (ores / batches) */
+  table.tbl{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:12.5px}
+  table.tbl th{color:var(--faint);font-weight:500;text-align:left;padding:6px 8px;
+    font-size:10.5px;letter-spacing:.09em;text-transform:uppercase}
+  table.tbl td{padding:4px 6px}
+  table.tbl input,table.tbl select{padding:8px 9px}
+  .rm{background:#0a0e13;border:1px solid var(--line2);color:var(--danger);
+    border-radius:8px;cursor:pointer;padding:8px 11px;font-family:var(--mono);transition:.12s}
+  .rm:hover{border-color:var(--danger);background:#160c0a}
+  .addrow{margin-top:12px;background:none;border:1px dashed var(--line2);
+    color:var(--muted);border-radius:9px;padding:10px 14px;cursor:pointer;
+    font-family:var(--mono);font-size:12px;width:100%;transition:.12s}
+  .addrow:hover{border-color:var(--grass);color:var(--grass)}
+
+  .pill{display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:11px;
+    color:var(--diamond);background:rgba(84,214,222,.09);border:1px solid rgba(84,214,222,.25);
+    border-radius:999px;padding:4px 10px}
+  .summary{margin-top:14px;display:flex;gap:10px;flex-wrap:wrap}
+
+  /* ---------- right rail ---------- */
+  .rail{position:sticky;top:88px;display:flex;flex-direction:column;gap:0}
+  .plate{border:1px solid var(--line);border-radius:16px;background:var(--card);overflow:hidden;
+    box-shadow:var(--shadow)}
+  .plate .hd{display:flex;justify-content:space-between;align-items:center;padding:13px 16px;
+    border-bottom:1px solid var(--line);font-family:var(--mono);font-size:11px;
+    letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+  .plate .hd .st{color:var(--grass);display:flex;align-items:center;gap:7px}
+  .plate .hd .st::before{content:"";width:7px;height:7px;border-radius:50%;
+    background:currentColor;box-shadow:0 0 8px currentColor}
   .mapbox{position:relative;aspect-ratio:1;background:
-    radial-gradient(circle at 50% 50%,#1d1b14,#0b0e12);display:flex;
+    radial-gradient(circle at 50% 40%,#12161d,#080b0f);display:flex;
     align-items:center;justify-content:center;overflow:hidden}
-  .mapbox:after{content:"";position:absolute;inset:11px;border:1px solid rgba(247,233,163,.16);
-    box-shadow:inset 0 0 0 1px rgba(0,0,0,.22);pointer-events:none}
-  .mapbox img{width:calc(100% - 22px);height:calc(100% - 22px);object-fit:contain;
-    image-rendering:pixelated;display:none;background:#776b43;
-    box-shadow:0 0 0 3px rgba(247,233,163,.17),0 14px 35px rgba(0,0,0,.35)}
-  .crosshair{position:absolute;inset:0;pointer-events:none}
-  .crosshair:before,.crosshair:after{content:"";position:absolute;background:rgba(87,214,221,.35)}
-  .crosshair:before{left:50%;top:0;bottom:0;width:1px;transform:translateX(-.5px)}
-  .crosshair:after{top:50%;left:0;right:0;height:1px;transform:translateY(-.5px)}
-  .origin{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
-    font-family:var(--mono);font-size:10px;color:var(--diamond);
-    background:rgba(11,14,18,.7);padding:2px 5px;border-radius:4px}
-  .placeholder{font-family:var(--mono);color:var(--faint);font-size:12px;
-    text-align:center;padding:0 30px;line-height:1.7}
-  .placeholder b{color:var(--bedrock);display:block;font-size:30px;
-    letter-spacing:.3em;margin-bottom:8px}
+  .mapbox img{width:calc(100% - 20px);height:calc(100% - 20px);object-fit:contain;
+    image-rendering:pixelated;display:none;border-radius:6px;
+    box-shadow:0 0 0 1px rgba(255,255,255,.06),0 12px 30px rgba(0,0,0,.4)}
+  .crosshair{position:absolute;inset:0;pointer-events:none;opacity:.5}
+  .crosshair:before,.crosshair:after{content:"";position:absolute;background:rgba(84,214,222,.25)}
+  .crosshair:before{left:50%;top:8%;bottom:8%;width:1px}
+  .crosshair:after{top:50%;left:8%;right:8%;height:1px}
+  .placeholder{font-family:var(--mono);color:var(--faint);font-size:12px;text-align:center;
+    padding:0 34px;line-height:1.8}
+  .placeholder b{color:var(--line2);display:block;font-size:40px;margin-bottom:10px}
 
-  .go{display:block;width:100%;margin-top:14px;background:var(--grass);
-    color:#08130a;border:none;border-radius:9px;padding:14px;font-weight:700;
-    font-size:14px;cursor:pointer;font-family:var(--mono);letter-spacing:.05em}
-  .go:hover{filter:brightness(1.07)}
-  .go:disabled{opacity:.5;cursor:not-allowed}
+  .go{display:flex;align-items:center;justify-content:center;gap:9px;width:100%;margin-top:16px;
+    background:linear-gradient(180deg,var(--grass),#4bb95e);color:#04140a;border:none;
+    border-radius:12px;padding:15px;font-weight:750;font-size:14.5px;cursor:pointer;
+    letter-spacing:.02em;box-shadow:0 8px 22px rgba(111,208,106,.28);transition:.15s}
+  .go:hover{filter:brightness(1.06);transform:translateY(-1px)}
+  .go:disabled{opacity:.5;cursor:not-allowed;transform:none;box-shadow:none}
+  body.sky .go{background:linear-gradient(180deg,var(--diamond),#39b7c0);color:#04181c;
+    box-shadow:0 8px 22px rgba(84,214,222,.28)}
 
-  .progress{margin-top:12px;height:8px;border-radius:5px;background:#0c0f13;
-    border:1px solid var(--line);overflow:hidden;display:none}
-  .progress .bar{height:100%;width:0;background:linear-gradient(90deg,var(--grass),var(--diamond));
-    transition:width .3s}
-  .status{margin-top:8px;font-family:var(--mono);font-size:12px;color:var(--muted);
-    min-height:16px}
+  .progress{margin-top:14px;height:9px;border-radius:6px;background:#0a0e13;
+    border:1px solid var(--line2);overflow:hidden;display:none}
+  .progress .bar{height:100%;width:0;border-radius:6px;
+    background:linear-gradient(90deg,var(--grass),var(--diamond));transition:width .3s}
+  .status{margin-top:10px;font-family:var(--mono);font-size:12px;color:var(--muted);min-height:16px}
 
-  .stats{margin-top:12px;display:none;font-family:var(--mono);font-size:12px;
-    color:var(--muted);border-top:1px dashed var(--line);padding-top:12px}
-  .stats div{display:flex;justify-content:space-between;padding:2px 0}
-  .stats b{color:var(--ink);font-weight:500}
-  .dl{display:none;width:100%;margin-top:12px;text-align:center;
-    background:var(--diamond);color:#062023;border:none;border-radius:9px;
-    padding:13px;font-weight:700;font-family:var(--mono);cursor:pointer;
-    text-decoration:none;letter-spacing:.05em}
-  .dl:hover{filter:brightness(1.07)}
-  .err{display:none;margin-top:12px;border:1px solid var(--danger);
-    border-radius:8px;padding:10px 12px;color:var(--danger);font-size:12px;
-    font-family:var(--mono);white-space:pre-wrap;max-height:200px;overflow:auto}
-  .foot{max-width:1200px;margin:0 auto;padding:0 24px 40px;color:var(--faint);
-    font-family:var(--mono);font-size:11px}
-  .foot code{color:var(--muted)}
+  .stats{margin-top:14px;display:none;font-family:var(--mono);font-size:12px;color:var(--muted);
+    border:1px solid var(--line);border-radius:12px;padding:12px 14px;background:var(--card2)}
+  .stats div{display:flex;justify-content:space-between;padding:3px 0}
+  .stats b{color:var(--ink);font-weight:600}
+  .dl{display:none;align-items:center;justify-content:center;gap:8px;width:100%;margin-top:12px;
+    text-align:center;background:var(--gold);color:#1a1305;border:none;border-radius:12px;
+    padding:14px;font-weight:750;font-family:var(--sans);cursor:pointer;text-decoration:none;
+    box-shadow:0 8px 20px rgba(242,193,78,.2)}
+  .dl:hover{filter:brightness(1.06)}
+  .err{display:none;margin-top:12px;border:1px solid var(--danger);border-radius:10px;
+    padding:11px 13px;color:var(--danger);font-size:12px;font-family:var(--mono);
+    white-space:pre-wrap;max-height:220px;overflow:auto;background:rgba(236,106,85,.06)}
+
+  .foot{max-width:1280px;margin:0 auto;padding:8px 26px 44px;color:var(--faint);
+    font-family:var(--mono);font-size:11px;line-height:1.8}
+  .foot code{color:var(--muted);background:#0a0e13;padding:1px 5px;border-radius:4px}
+  .hide{display:none!important}
 </style>
 </head>
 <body>
-<div class="masthead"><div class="row">
-  <span class="brand"><b>◧</b> World&nbsp;Forge</span>
-  <span class="tag">finite bedrock-walled Minecraft worlds · Java Edition</span>
-  <span class="coord" id="coord">origin 0 / 0 / 0</span>
+<div class="top"><div class="row">
+  <div class="brand"><span class="logo">◧</span>
+    <span>World&nbsp;Forge<small>finite &amp; skywars worlds · Java Edition</small></span></div>
+  <div class="seg" id="seg">
+    <button type="button" data-gen="vanilla" class="on"><span class="dot"></span>Vanilla</button>
+    <button type="button" data-gen="skywars"><span class="dot"></span>Skywars</button>
+  </div>
 </div></div>
 
 <div class="wrap">
-  <!-- ============ CONTROLS ============ -->
-  <form id="form">
-    <fieldset>
-      <legend><span class="n">01</span> World</legend>
-      <div class="grid">
-        <div class="field"><label>World name</label>
-          <input type="text" id="name" value="Forged World"></div>
-        <div class="field"><label>Seed</label>
-          <div class="seedrow"><input type="number" id="seed" value="0">
-            <button type="button" class="smallbtn" id="random_seed">randomize</button></div>
-          <span class="hint">same seed + settings → same world</span></div>
-        <div class="field"><label>Width &amp; length (blocks, square)</label>
-          <input type="number" id="size" value="1000" min="16" max="6000" step="16">
-          <span class="hint">centered on 0, 0 — grows outward evenly</span></div>
-        <div class="field"><label>Target Minecraft version</label>
-          <select id="version">
-            {% for v in versions %}<option value="{{v}}" {% if v=='1.20.1' %}selected{% endif %}>{{v}}</option>{% endfor %}
-          </select>
-          <span class="hint">opens in this version or newer</span></div>
-        <div class="field"><label>Starting mode</label>
-          <select id="game_type"><option value="0">Survival</option>
-            <option value="1">Creative</option></select></div>
-        <div class="field"><label>Worker processes</label>
-          <input type="number" id="workers" value="0" min="0" max="64" step="1">
-          <span class="hint">0 = auto ({{cpu_count}} CPU threads detected); raise manually to crunch harder</span></div>
-        <div class="field check" style="align-self:end">
-          <input type="checkbox" id="allow_commands" checked>
-          <label for="allow_commands" style="color:var(--ink)">Allow cheats / commands</label></div>
-      </div>
-    </fieldset>
+  <!-- ========================= CONTROLS ========================= -->
+  <form id="form" autocomplete="off">
 
-    <fieldset>
-      <legend><span class="n">02</span> Vertical shape</legend>
-      <div class="grid three">
-        <div class="field"><label>Bedrock floor Y</label>
-          <input type="number" id="floor_y" value="-20">
-          <span class="hint">void below this</span></div>
-        <div class="field"><label>Water level Y</label>
-          <input type="number" id="water_level" value="62"></div>
-        <div class="field"><label>Base land height Y</label>
-          <input type="number" id="base_height" value="71"></div>
+    <!-- shared world settings -->
+    <div class="card">
+      <div class="hd"><span class="ix">01</span>
+        <div><h3>World</h3><p>name · seed · version · performance</p></div></div>
+      <div class="bd">
+        <div class="grid">
+          <div class="field"><label>World name</label>
+            <input type="text" id="name" value="Forged World"></div>
+          <div class="field"><label>Seed</label>
+            <div class="seedrow"><input type="number" id="seed" value="0">
+              <button type="button" class="btn-ghost" id="random_seed">random</button></div>
+            <span class="hint">same seed + settings → same world</span></div>
+          <div class="field"><label>Target Minecraft version</label>
+            <select id="version">
+              {% for v in versions %}<option value="{{v}}" {% if v=='1.20.1' %}selected{% endif %}>{{v}}</option>{% endfor %}
+            </select></div>
+          <div class="field"><label>Starting mode</label>
+            <select id="game_type">
+              <option value="0">Survival</option>
+              <option value="1">Creative</option>
+              <option value="2">Adventure</option>
+            </select></div>
+          <div class="field"><label>Worker processes</label>
+            <input type="number" id="workers" value="0" min="0" max="64" step="1">
+            <span class="hint">0 = auto ({{cpu_count}} threads detected)</span></div>
+          <div class="field check" style="align-self:end">
+            <input type="checkbox" id="allow_commands" checked>
+            <label for="allow_commands">Allow cheats / commands</label></div>
+        </div>
       </div>
-    </fieldset>
+    </div>
 
-    <fieldset>
-      <legend><span class="n">03</span> Terrain &amp; mountains</legend>
-      <div class="grid">
-        <div class="field slider"><label>Mountain amount</label>
-          <input type="range" id="mountain_amount" min="0" max="1" step="0.05" value="0.5">
-          <span class="val" id="mountain_amount_v">0.50</span></div>
-        <div class="field"><label>Mountain height (blocks)</label>
-          <input type="number" id="mountain_amp" value="70"></div>
-        <div class="field"><label>Rolling-hill height (blocks)</label>
-          <input type="number" id="hill_amp" value="12"></div>
-        <div class="field"><label>Snow line Y (snow above)</label>
-          <input type="number" id="snowline_y" value="95"></div>
+    <!-- ===================== VANILLA PANEL ===================== -->
+    <div id="vanilla-panel">
+      <div class="card">
+        <div class="hd"><span class="ix">02</span>
+          <div><h3>Extent &amp; vertical shape</h3><p>square world centred on 0,0</p></div></div>
+        <div class="bd">
+          <div class="grid">
+            <div class="field"><label>Width &amp; length (blocks)</label>
+              <input type="number" id="size" value="1000" min="16" max="6000" step="16">
+              <span class="hint">grows outward evenly from origin</span></div>
+            <div class="field"><label>Bedrock floor Y</label>
+              <input type="number" id="floor_y" value="-20">
+              <span class="hint">void below this</span></div>
+            <div class="field"><label>Water level Y</label>
+              <input type="number" id="water_level" value="62"></div>
+            <div class="field"><label>Base land height Y</label>
+              <input type="number" id="base_height" value="71"></div>
+          </div>
+        </div>
       </div>
-    </fieldset>
 
-    <fieldset>
-      <legend><span class="n">04</span> Caves, water &amp; trees</legend>
-      <div class="grid">
-        <div class="field check"><input type="checkbox" id="caves" checked>
-          <label for="caves" style="color:var(--ink)">Carve caves</label></div>
-        <div class="field slider"><label>Cave amount</label>
-          <input type="range" id="cave_intensity" min="0.2" max="2" step="0.1" value="1">
-          <span class="val" id="cave_intensity_v">1.0</span></div>
-        <div class="field check"><input type="checkbox" id="rivers" checked>
-          <label for="rivers" style="color:var(--ink)">Rivers</label></div>
-        <div class="field slider"><label>River amount</label>
-          <input type="range" id="river_amount" min="0" max="1" step="0.05" value="0.4">
-          <span class="val" id="river_amount_v">0.40</span></div>
-        <div class="field check"><input type="checkbox" id="lakes" checked>
-          <label for="lakes" style="color:var(--ink)">Small lakes</label></div>
-        <div class="field slider"><label>Lake amount</label>
-          <input type="range" id="lake_amount" min="0" max="1" step="0.05" value="0.4">
-          <span class="val" id="lake_amount_v">0.40</span></div>
-        <div class="field check"><input type="checkbox" id="ravines" checked>
-          <label for="ravines" style="color:var(--ink)">Ravines &amp; cave openings</label></div>
-        <div class="field check"><input type="checkbox" id="fluids" checked>
-          <label for="fluids" style="color:var(--ink)">Underground lava &amp; water</label></div>
-        <div class="field check"><input type="checkbox" id="stone_variants" checked>
-          <label for="stone_variants" style="color:var(--ink)">Diorite / granite / andesite</label></div>
-        <div class="field check"><input type="checkbox" id="trees" checked>
-          <label for="trees" style="color:var(--ink)">Trees</label></div>
-        <div class="field slider"><label>Tree density</label>
-          <input type="range" id="tree_density" min="0" max="2" step="0.1" value="1">
-          <span class="val" id="tree_density_v">1.0</span></div>
-        <div class="field check"><input type="checkbox" id="decorations" checked>
-          <label for="decorations" style="color:var(--ink)">Grass, flowers, cane &amp; cactus</label></div>
+      <div class="card">
+        <div class="hd"><span class="ix">03</span>
+          <div><h3>Terrain &amp; mountains</h3></div></div>
+        <div class="bd"><div class="grid">
+          <div class="field slider"><div class="top"><label>Mountain amount</label>
+            <span class="val" id="mountain_amount_v">0.50</span></div>
+            <input type="range" id="mountain_amount" min="0" max="1" step="0.05" value="0.5"></div>
+          <div class="field"><label>Mountain height (blocks)</label>
+            <input type="number" id="mountain_amp" value="70"></div>
+          <div class="field"><label>Rolling-hill height</label>
+            <input type="number" id="hill_amp" value="12"></div>
+          <div class="field"><label>Snow line Y</label>
+            <input type="number" id="snowline_y" value="95"></div>
+        </div></div>
       </div>
-    </fieldset>
 
-    <fieldset>
-      <legend><span class="n">05</span> Bedrock border wall</legend>
-      <div class="grid three">
-        <div class="field check"><input type="checkbox" id="wall" checked>
-          <label for="wall" style="color:var(--ink)">Wall the border</label></div>
-        <div class="field"><label>Wall bottom Y</label>
-          <input type="number" id="wall_min_y" value="-64">
-          <span class="hint">min world height</span></div>
-        <div class="field"><label>Wall top Y</label>
-          <input type="number" id="wall_max_y" value="319">
-          <span class="hint">no ceiling above</span></div>
+      <div class="card">
+        <div class="hd"><span class="ix">04</span>
+          <div><h3>Caves, water &amp; foliage</h3></div></div>
+        <div class="bd"><div class="grid">
+          <div class="field check"><input type="checkbox" id="caves" checked>
+            <label for="caves">Carve caves</label></div>
+          <div class="field slider"><div class="top"><label>Cave amount</label>
+            <span class="val" id="cave_intensity_v">1.0</span></div>
+            <input type="range" id="cave_intensity" min="0.2" max="2" step="0.1" value="1"></div>
+          <div class="field check"><input type="checkbox" id="rivers" checked>
+            <label for="rivers">Rivers</label></div>
+          <div class="field slider"><div class="top"><label>River amount</label>
+            <span class="val" id="river_amount_v">0.40</span></div>
+            <input type="range" id="river_amount" min="0" max="1" step="0.05" value="0.4"></div>
+          <div class="field check"><input type="checkbox" id="lakes" checked>
+            <label for="lakes">Small lakes</label></div>
+          <div class="field slider"><div class="top"><label>Lake amount</label>
+            <span class="val" id="lake_amount_v">0.40</span></div>
+            <input type="range" id="lake_amount" min="0" max="1" step="0.05" value="0.4"></div>
+          <div class="field check"><input type="checkbox" id="ravines" checked>
+            <label for="ravines">Ravines &amp; openings</label></div>
+          <div class="field check"><input type="checkbox" id="fluids" checked>
+            <label for="fluids">Underground lava &amp; water</label></div>
+          <div class="field check"><input type="checkbox" id="stone_variants" checked>
+            <label for="stone_variants">Diorite / granite / andesite</label></div>
+          <div class="field check"><input type="checkbox" id="trees" checked>
+            <label for="trees">Trees</label></div>
+          <div class="field slider"><div class="top"><label>Tree density</label>
+            <span class="val" id="tree_density_v">1.0</span></div>
+            <input type="range" id="tree_density" min="0" max="2" step="0.1" value="1"></div>
+          <div class="field check"><input type="checkbox" id="decorations" checked>
+            <label for="decorations">Grass, flowers, cane &amp; cactus</label></div>
+        </div></div>
       </div>
-    </fieldset>
 
-    <fieldset>
-      <legend><span class="n">06</span> Ore veins</legend>
-      <table class="ores"><thead><tr>
-        <th class="oname">Ore</th><th>Min Y</th><th>Max Y</th>
-        <th>Veins / chunk</th><th>Vein size</th><th>Depth bias</th><th></th>
-      </tr></thead><tbody id="orebody"></tbody></table>
-      <button type="button" class="addore" id="addore">+ add ore</button>
-    </fieldset>
+      <div class="card">
+        <div class="hd"><span class="ix">05</span>
+          <div><h3>Bedrock border wall</h3></div></div>
+        <div class="bd"><div class="grid three">
+          <div class="field check"><input type="checkbox" id="wall" checked>
+            <label for="wall">Wall the border</label></div>
+          <div class="field"><label>Wall bottom Y</label>
+            <input type="number" id="wall_min_y" value="-64"></div>
+          <div class="field"><label>Wall top Y</label>
+            <input type="number" id="wall_max_y" value="319"></div>
+        </div></div>
+      </div>
+
+      <div class="card">
+        <div class="hd"><span class="ix">06</span>
+          <div><h3>Ore veins</h3><p>vanilla-style vein placement</p></div></div>
+        <div class="bd">
+          <table class="tbl"><thead><tr>
+            <th>Ore</th><th>Min Y</th><th>Max Y</th><th>Veins / chunk</th>
+            <th>Vein size</th><th>Depth bias</th><th></th>
+          </tr></thead><tbody id="orebody"></tbody></table>
+          <button type="button" class="addrow" id="addore">+ add ore</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================== SKYWARS PANEL ===================== -->
+    <div id="skywars-panel" class="hide">
+      <div class="card">
+        <div class="hd"><span class="ix">02</span>
+          <div><h3>Map batches</h3><p>generate many island clusters in one world</p></div></div>
+        <div class="bd">
+          <p style="margin:0 0 12px;color:var(--faint);font-size:12px">
+            Each row = a group of clusters built for the same number of spawn islands.
+            Clusters are laid out on a padded grid, ≥200 blocks apart, each with its own positions JSON.</p>
+          <table class="tbl"><thead><tr>
+            <th style="width:44%">Spawn islands / cluster</th>
+            <th style="width:44%">How many clusters</th><th></th>
+          </tr></thead><tbody id="batchbody"></tbody></table>
+          <button type="button" class="addrow" id="addbatch">+ add batch row</button>
+          <div class="summary" id="batchsummary"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="hd"><span class="ix">03</span>
+          <div><h3>Island shape</h3><p>flat PvP tops, spiky undersides</p></div></div>
+        <div class="bd"><div class="grid three">
+          <div class="field"><label>Main island radius</label>
+            <input type="number" id="main_size" value="73" min="8" max="200"></div>
+          <div class="field"><label>Middle island radius</label>
+            <input type="number" id="middle_size" value="36" min="6" max="140"></div>
+          <div class="field"><label>Spawn island radius</label>
+            <input type="number" id="spawn_size" value="26" min="5" max="120"></div>
+          <div class="field"><label>Island gap</label>
+            <input type="number" id="island_gap" value="16" min="4" max="60">
+            <span class="hint">air blocks between island edges</span></div>
+          <div class="field slider"><div class="top"><label>Middle-ring density</label>
+            <span class="val" id="middle_ratio_v">1.00</span></div>
+            <input type="range" id="middle_ratio" min="0.2" max="1" step="0.05" value="1">
+            <span class="hint">1 = fully packed (fills corners)</span></div>
+          <div class="field"><label>Cluster spacing</label>
+            <input type="number" id="cluster_spacing" value="240" min="200" max="6000" step="10">
+            <span class="hint">grid padding (≥200)</span></div>
+          <div class="field"><label>Base surface Y</label>
+            <input type="number" id="base_y" value="90"></div>
+          <div class="field slider"><div class="top"><label>Height variation (±Y)</label>
+            <span class="val" id="height_jitter_v">0</span></div>
+            <input type="range" id="height_jitter" min="0" max="30" step="1" value="0">
+            <span class="hint">0 = every island at the same Y</span></div>
+          <div class="field slider"><div class="top"><label>Surface relief</label>
+            <span class="val" id="surface_relief_v">1.0</span></div>
+            <input type="range" id="surface_relief" min="0" max="4" step="0.1" value="1">
+            <span class="hint">gentle top bumps (0 = flat)</span></div>
+        </div></div>
+      </div>
+
+      <div class="card">
+        <div class="hd"><span class="ix">04</span>
+          <div><h3>Biomes &amp; decoration</h3></div></div>
+        <div class="bd"><div class="grid">
+          <div class="field check"><input type="checkbox" id="varied_biomes" checked>
+            <label for="varied_biomes">Varied biomes &amp; temperatures</label></div>
+          <div></div>
+          <div class="field slider"><div class="top"><label>Tree density</label>
+            <span class="val" id="sky_tree_density_v">1.0</span></div>
+            <input type="range" id="sky_tree_density" min="0" max="2" step="0.1" value="1"></div>
+          <div class="field slider"><div class="top"><label>Rock density</label>
+            <span class="val" id="rock_density_v">1.0</span></div>
+            <input type="range" id="rock_density" min="0" max="2" step="0.1" value="1"></div>
+          <div class="field slider"><div class="top"><label>Foliage density</label>
+            <span class="val" id="foliage_density_v">1.0</span></div>
+            <input type="range" id="foliage_density" min="0" max="2" step="0.1" value="1"></div>
+        </div></div>
+      </div>
+
+      <div class="card">
+        <div class="hd"><span class="ix">05</span>
+          <div><h3>Ores</h3><p>on the surface and buried in the stone</p></div></div>
+        <div class="bd">
+          <div class="grid" style="margin-bottom:16px">
+            <div class="field slider"><div class="top"><label>Overall ore density</label>
+              <span class="val" id="ore_density_v">1.0</span></div>
+              <input type="range" id="ore_density" min="0" max="3" step="0.1" value="1"></div>
+            <div class="field slider"><div class="top"><label>Surface ore exposure</label>
+              <span class="val" id="surface_ore_v">1.0</span></div>
+              <input type="range" id="surface_ore" min="0" max="3" step="0.1" value="1"></div>
+          </div>
+          <table class="tbl"><thead><tr>
+            <th style="width:60%">Ore</th><th>Ratio (relative frequency)</th><th></th>
+          </tr></thead><tbody id="skyorebody"></tbody></table>
+          <button type="button" class="addrow" id="addskyore">+ add ore</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="hd"><span class="ix">06</span>
+          <div><h3>Chests</h3><p>loot on spawn islands, ender chests on the centre</p></div></div>
+        <div class="bd"><div class="grid three">
+          <div class="field"><label>Chests / spawn island</label>
+            <input type="number" id="chests_per_spawn" value="5" min="0" max="120"></div>
+          <div class="field"><label>Chests / middle island</label>
+            <input type="number" id="chests_per_middle" value="5" min="0" max="120"></div>
+          <div class="field"><label>Ender chests on main</label>
+            <input type="number" id="ender_chests_main" value="10" min="0" max="200"></div>
+        </div></div>
+      </div>
+    </div>
   </form>
 
-  <!-- ============ PLATE ============ -->
+  <!-- ========================= PLATE ========================= -->
   <div class="rail">
     <div class="plate">
-      <div class="head"><span>Survey plate</span><span class="st" id="plate_st">idle</span></div>
+      <div class="hd"><span>Survey map</span><span class="st" id="plate_st">idle</span></div>
       <div class="mapbox">
         <img id="mapimg" alt="world preview">
-        <div class="crosshair" id="crosshair"></div>
-        <div class="origin" id="origin" style="display:none">0,0</div>
+        <div class="crosshair"></div>
         <div class="placeholder" id="ph"><b>▦</b>preview renders here<br>as a top-down map</div>
       </div>
     </div>
-    <button class="go" id="go">Forge world</button>
+    <button class="go" id="go">⚒ Forge world</button>
     <div class="progress" id="progress"><div class="bar" id="bar"></div></div>
     <div class="status" id="status"></div>
     <div class="stats" id="stats"></div>
-    <a class="dl" id="dl">↓ Download world (.zip)</a>
+    <a class="dl" id="dl">↓ Download (.zip)</a>
     <div class="err" id="err"></div>
   </div>
 </div>
 
 <div class="foot">
-  Unzip into your Minecraft <code>saves/</code> folder, then open it from the world
-  list. The world is sealed in bedrock from wall-bottom to wall-top; everything
-  generates outward from spawn at 0, 0.
+  Unzip into your Minecraft <code>saves/</code> folder, then open it from the world list.
+  Skywars worlds are pure void: the zip bundles the world plus a <code>positions/</code> folder
+  with a labelled JSON per cluster (spawn point per spawn island + the centre island's midpoint).
 </div>
 
 <script>
 const $=id=>document.getElementById(id);
+let GEN="vanilla";
+
+/* ---------- generator switch ---------- */
+$("seg").querySelectorAll("button").forEach(b=>{
+  b.onclick=()=>{
+    GEN=b.dataset.gen;
+    $("seg").querySelectorAll("button").forEach(x=>{
+      x.classList.toggle("on",x===b);
+      x.classList.toggle("sky",x===b&&GEN==="skywars");
+    });
+    document.body.classList.toggle("sky",GEN==="skywars");
+    $("vanilla-panel").classList.toggle("hide",GEN!=="vanilla");
+    $("skywars-panel").classList.toggle("hide",GEN!=="skywars");
+    $("go").textContent=GEN==="skywars"?"⚒ Forge skywars world":"⚒ Forge world";
+    if(GEN==="skywars"&&$("name").value==="Forged World")$("name").value="Skywars";
+    if(GEN==="vanilla"&&$("name").value==="Skywars")$("name").value="Forged World";
+  };
+});
+
+/* ---------- vanilla ores ---------- */
 const DEFAULT_ORES=[
   {name:"coal_ore",y_min:5,y_max:120,veins_per_chunk:11,vein_size:12,bias:"high"},
   {name:"iron_ore",y_min:-19,y_max:80,veins_per_chunk:9,vein_size:8,bias:"mid"},
@@ -300,12 +483,12 @@ const DEFAULT_ORES=[
 function oreRow(o){
   const tr=document.createElement("tr");
   tr.innerHTML=`
-   <td><input type="text" class="oname" value="${o.name}"></td>
-   <td><input type="number" value="${o.y_min}" style="width:64px"></td>
-   <td><input type="number" value="${o.y_max}" style="width:64px"></td>
+   <td><input type="text" value="${o.name}"></td>
+   <td><input type="number" value="${o.y_min}" style="width:62px"></td>
+   <td><input type="number" value="${o.y_max}" style="width:62px"></td>
    <td><input type="number" value="${o.veins_per_chunk}" step="0.5" style="width:70px"></td>
-   <td><input type="number" value="${o.vein_size}" style="width:60px"></td>
-   <td><select class="obias" style="width:78px">
+   <td><input type="number" value="${o.vein_size}" style="width:58px"></td>
+   <td><select class="obias" style="width:80px">
      ${["uniform","low","mid","high"].map(b=>`<option value="${b}" ${b===(o.bias||"uniform")?"selected":""}>${b}</option>`).join("")}
    </select></td>
    <td><button type="button" class="rm">✕</button></td>`;
@@ -315,30 +498,103 @@ function oreRow(o){
 DEFAULT_ORES.forEach(o=>$("orebody").appendChild(oreRow(o)));
 $("addore").onclick=()=>$("orebody").appendChild(
   oreRow({name:"emerald_ore",y_min:-19,y_max:80,veins_per_chunk:1,vein_size:3,bias:"high"}));
-$("random_seed").onclick=()=>{
-  const bytes=new Uint32Array(1);
-  crypto.getRandomValues(bytes);
-  $("seed").value=(bytes[0]|0).toString();
-};
 
-["mountain_amount","cave_intensity","river_amount","lake_amount","tree_density"].forEach(id=>{
+/* ---------- skywars ores ---------- */
+const SKY_ORES=[
+  {name:"iron_ore",ratio:26},{name:"redstone_ore",ratio:16},{name:"gold_ore",ratio:12},
+  {name:"lapis_ore",ratio:11},{name:"diamond_ore",ratio:9},{name:"emerald_ore",ratio:4},
+];
+function skyOreRow(o){
+  const tr=document.createElement("tr");
+  tr.innerHTML=`
+   <td><input type="text" value="${o.name}"></td>
+   <td><input type="number" value="${o.ratio}" step="0.5" min="0" style="width:110px"></td>
+   <td><button type="button" class="rm">✕</button></td>`;
+  tr.querySelector(".rm").onclick=()=>tr.remove();
+  return tr;
+}
+SKY_ORES.forEach(o=>$("skyorebody").appendChild(skyOreRow(o)));
+$("addskyore").onclick=()=>$("skyorebody").appendChild(skyOreRow({name:"amethyst_ore",ratio:2}));
+
+/* ---------- batches ---------- */
+function batchRow(spawn,count){
+  const tr=document.createElement("tr");
+  tr.innerHTML=`
+   <td><input type="number" class="bspawn" value="${spawn}" min="2" max="128" style="width:120px"></td>
+   <td><input type="number" class="bcount" value="${count}" min="1" max="200" style="width:120px"></td>
+   <td><button type="button" class="rm">✕</button></td>`;
+  tr.querySelector(".rm").onclick=()=>{tr.remove();updateBatchSummary();};
+  tr.querySelectorAll("input").forEach(i=>i.addEventListener("input",updateBatchSummary));
+  return tr;
+}
+function updateBatchSummary(){
+  let clusters=0,spawns=0;
+  [...$("batchbody").querySelectorAll("tr")].forEach(tr=>{
+    const c=+tr.querySelector(".bcount").value||0;
+    const s=+tr.querySelector(".bspawn").value||0;
+    clusters+=c;spawns+=c*s;
+  });
+  $("batchsummary").innerHTML=
+    `<span class="pill">◈ ${clusters} cluster${clusters!==1?"s":""}</span>`+
+    `<span class="pill">⚑ ${spawns} spawn islands total</span>`;
+}
+$("batchbody").appendChild(batchRow(12,1));
+$("addbatch").onclick=()=>{$("batchbody").appendChild(batchRow(24,10));updateBatchSummary();};
+updateBatchSummary();
+
+/* ---------- sliders ---------- */
+[["mountain_amount",2],["cave_intensity",1],["river_amount",2],["lake_amount",2],
+ ["tree_density",1],["middle_ratio",2],["sky_tree_density",1],["rock_density",1],
+ ["foliage_density",1],["ore_density",1],["surface_ore",1],["height_jitter",0],
+ ["surface_relief",1]].forEach(([id,dp])=>{
   const el=$(id),v=$(id+"_v");
-  const f=()=>v.textContent=(+el.value).toFixed(2).replace(/0$/, id=="mountain_amount"?"0":"");
-  el.addEventListener("input",()=>v.textContent=(+el.value).toFixed(id=="cave_intensity"||id=="tree_density"?1:2));
+  if(!el||!v)return;
+  const f=()=>v.textContent=(+el.value).toFixed(dp);
+  el.addEventListener("input",f);f();
 });
 
+$("random_seed").onclick=()=>{
+  const b=new Uint32Array(1);crypto.getRandomValues(b);
+  $("seed").value=(b[0]|0).toString();
+};
+
+/* ---------- collect payload ---------- */
 function collect(){
+  const common={
+    generator:GEN,name:$("name").value,seed:+$("seed").value,
+    version:$("version").value,game_type:+$("game_type").value,
+    workers:+$("workers").value,allow_commands:$("allow_commands").checked,
+  };
+  if(GEN==="skywars"){
+    const batches=[...$("batchbody").querySelectorAll("tr")].map(tr=>({
+      spawn_islands:+tr.querySelector(".bspawn").value,
+      count:+tr.querySelector(".bcount").value,
+    })).filter(b=>b.count>0);
+    const ores=[...$("skyorebody").querySelectorAll("tr")].map(tr=>{
+      const i=tr.querySelectorAll("input");
+      return {name:i[0].value,ratio:+i[1].value};
+    });
+    return {...common,batches,
+      main_size:+$("main_size").value,middle_size:+$("middle_size").value,
+      spawn_size:+$("spawn_size").value,island_gap:+$("island_gap").value,
+      middle_ratio:+$("middle_ratio").value,cluster_spacing:+$("cluster_spacing").value,
+      base_y:+$("base_y").value,height_jitter:+$("height_jitter").value,
+      surface_relief:+$("surface_relief").value,
+      varied_biomes:$("varied_biomes").checked,
+      tree_density:+$("sky_tree_density").value,rock_density:+$("rock_density").value,
+      foliage_density:+$("foliage_density").value,
+      ore_density:+$("ore_density").value,surface_ore:+$("surface_ore").value,
+      chests_per_spawn:+$("chests_per_spawn").value,
+      chests_per_middle:+$("chests_per_middle").value,
+      ender_chests_main:+$("ender_chests_main").value,ores};
+  }
   const ores=[...$("orebody").querySelectorAll("tr")].map(tr=>{
     const i=tr.querySelectorAll("input");
     const sel=tr.querySelector(".obias");
     return {name:i[0].value,y_min:+i[1].value,y_max:+i[2].value,
-            veins_per_chunk:+i[3].value,vein_size:+i[4].value,
-            bias:sel?sel.value:"uniform"};
+            veins_per_chunk:+i[3].value,vein_size:+i[4].value,bias:sel?sel.value:"uniform"};
   });
-  return {
-    name:$("name").value,size:+$("size").value,seed:+$("seed").value,
-    version:$("version").value,game_type:+$("game_type").value,workers:+$("workers").value,
-    allow_commands:$("allow_commands").checked,
+  return {...common,size:+$("size").value,
     floor_y:+$("floor_y").value,water_level:+$("water_level").value,
     base_height:+$("base_height").value,
     mountain_amount:+$("mountain_amount").value,mountain_amp:+$("mountain_amp").value,
@@ -351,21 +607,20 @@ function collect(){
     trees:$("trees").checked,tree_density:+$("tree_density").value,
     decorations:$("decorations").checked,
     wall:$("wall").checked,wall_min_y:+$("wall_min_y").value,
-    wall_max_y:+$("wall_max_y").value,ores
-  };
+    wall_max_y:+$("wall_max_y").value,ores};
 }
 
+/* ---------- run ---------- */
 let poll=null;
-function setStatus(t){$("status").textContent=t;}
+const setStatus=t=>$("status").textContent=t;
 $("go").onclick=async()=>{
   const cfg=collect();
-  $("coord").textContent=`origin 0 / ${cfg.base_height} / 0`;
   $("go").disabled=true;$("err").style.display="none";
   $("stats").style.display="none";$("dl").style.display="none";
   $("progress").style.display="block";$("bar").style.width="2%";
   const img=$("mapimg");img.removeAttribute("src");img.style.display="none";
-  $("ph").style.display="block";$("origin").style.display="none";
-  $("plate_st").textContent="forging";
+  $("ph").style.display="block";
+  $("plate_st").textContent="forging";$("plate_st").style.color="var(--gold)";
   setStatus("Sending job…");
   let res;
   try{
@@ -381,39 +636,50 @@ $("go").onclick=async()=>{
     if(p.preview){
       const img=$("mapimg");
       if(img.src!==p.preview)img.src=p.preview;
-      img.style.display="block";
-      $("ph").style.display="none";$("origin").style.display="block";
-      if(!p.done)$("plate_st").textContent="mapping";
+      img.style.display="block";$("ph").style.display="none";
+      if(!p.done){$("plate_st").textContent="mapping";}
     }
     if(p.done){
       clearInterval(poll);$("go").disabled=false;
       if(p.error){fail(p.error+"\n\n"+(p.traceback||""));return;}
-      $("plate_st").textContent="mapped";
+      $("plate_st").textContent="ready";$("plate_st").style.color="var(--grass)";
       const img=$("mapimg");if(p.preview)img.src=p.preview;img.style.display="block";
-      $("ph").style.display="none";$("origin").style.display="block";
+      $("ph").style.display="none";
       showStats(p.stats);
-      const dl=$("dl");dl.href="/download/"+job;dl.style.display="block";
+      const dl=$("dl");dl.href="/download/"+job;dl.style.display="flex";
       setStatus("World ready.");
     }
   },500);
 };
 function fail(msg){
-  $("plate_st").textContent="error";$("go").disabled=false;
-  if(poll)clearInterval(poll);
+  $("plate_st").textContent="error";$("plate_st").style.color="var(--danger)";
+  $("go").disabled=false;if(poll)clearInterval(poll);
   const e=$("err");e.style.display="block";e.textContent=msg;
   setStatus("Generation failed.");
 }
+function row(k,v){return `<div><span>${k}</span><b>${v}</b></div>`;}
 function showStats(s){
   if(!s)return;
   const box=$("stats");box.style.display="block";
-  const [x0,x1]=s.bounds;
-  box.innerHTML=`
-   <div><span>chunks generated</span><b>${s.chunks}</b></div>
-   <div><span>region files</span><b>${s.regions}</b></div>
-   <div><span>workers / mode</span><b>${s.workers} / ${s.job_mode||"region"}</b></div>
-   <div><span>world bounds (x,z)</span><b>${x0} … ${x1}</b></div>
-   <div><span>spawn</span><b>${s.spawn.join(" / ")}</b></div>
-   <div><span>build time</span><b>${s.seconds}s</b></div>`;
+  let html="";
+  if("clusters" in s){
+    html+=row("clusters",s.clusters);
+    html+=row("spawn islands total",s.spawn_islands_total);
+    html+=row("region files",s.regions);
+    html+=row("workers",s.workers);
+    html+=row("world extent",(s.world_size||0)+" blocks");
+    html+=row("spawn",(s.spawn||[]).join(" / "));
+    html+=row("build time",s.seconds+"s");
+  }else{
+    const [x0,x1]=s.bounds||[0,0];
+    html+=row("chunks generated",s.chunks);
+    html+=row("region files",s.regions);
+    html+=row("workers / mode",s.workers+" / "+(s.job_mode||"region"));
+    html+=row("world bounds (x,z)",x0+" … "+x1);
+    html+=row("spawn",(s.spawn||[]).join(" / "));
+    html+=row("build time",s.seconds+"s");
+  }
+  box.innerHTML=html;
 }
 </script>
 </body>
