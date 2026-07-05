@@ -143,10 +143,10 @@ class SkywarsConfig:
     batches: List[BatchEntry] = field(default_factory=lambda: [BatchEntry(12, 1)])
 
     # Island sizing (radii in blocks).
-    main_size: int = 73
-    middle_size: int = 36
-    spawn_size: int = 26
-    island_gap: int = 16              # air gap (blocks) between neighbouring island edges
+    main_size: int = 52
+    middle_size: int = 21             # ~80% of spawn size
+    spawn_size: int = 26              # max spawn radius; shrinks to keep gaps tight
+    island_gap: int = 12              # target void gap (blocks) between island edges
     middle_ratio: float = 1.0         # how densely the middle ring is packed (0..1)
 
     base_y: int = 90                  # exact surface height of islands (see height_jitter)
@@ -402,7 +402,7 @@ def stamp_island(store: ChunkStore, blocks: SkyBlocks, cfg: SkywarsConfig,
     edge_seed = _hash(isl.wx, isl.wz, cfg.seed, 7)
     spike_seed = _hash(isl.wx, isl.wz, cfg.seed, 19)
     relief_seed = _hash(isl.wx, isl.wz, cfg.seed, 41)
-    relief_amp = float(cfg.surface_relief) * 2.4
+    relief_amp = float(cfg.surface_relief) * 1.25
 
     cx0 = (isl.wx - int(R) - 2) >> 4
     cx1 = (isl.wx + int(R) + 2) >> 4
@@ -441,9 +441,9 @@ def stamp_island(store: ChunkStore, blocks: SkyBlocks, cfg: SkywarsConfig,
             # jagged bumps -- natural looking but still fightable.
             flat_y = int(np.clip(isl.surface_y, BAND_LO + 3, BAND_HI - 3))
             if relief_amp > 0:
-                # two octaves: broad plateaus + a little finer variation
-                relief = (0.7 * _value_noise2d(X * 0.055, Z * 0.055, relief_seed)
-                          + 0.3 * _value_noise2d(X * 0.12, Z * 0.12, relief_seed + 5))
+                # gentle small-scale undulation: a mid frequency so the surface
+                # gets scattered low bumps rather than one big ramping staircase
+                relief = _value_noise2d(X * 0.07, Z * 0.07, relief_seed)
                 surf = flat_y + np.round((relief - 0.5) * 2.0 * relief_amp).astype(np.int64)
             else:
                 surf = np.full((16, 16), flat_y, dtype=np.int64)
@@ -567,6 +567,15 @@ def _set(store, blocks, wx, wy, wz, bid, replace_air_only=False):
     arr[yi, lz, lx] = bid
 
 
+def _block_at(store, wx, wy, wz):
+    if wy < BAND_LO or wy > BAND_HI:
+        return AIR
+    arr = store.blocks.get((wx >> 4, wz >> 4))
+    if arr is None:
+        return AIR
+    return int(arr[wy - BAND_LO, wz & 15, wx & 15])
+
+
 def _tree(store, blocks, wx, wz, base_y, kind, rng):
     trunk = rng.randint(4, 6) if kind != "jungle" else rng.randint(5, 8)
     log = blocks.log(kind)
@@ -620,6 +629,15 @@ def decorate_island(store, blocks, cfg, isl, surface_cols, rng):
     tree_kinds = SURFACE_TREES.get(style, [])
     area = math.pi * isl.radius * isl.radius
 
+    # Ground blocks that plants / trees may sit on (never ore, stone, snow, etc.).
+    soil_ids = {blocks.grass, blocks.grass_snow, blocks.dirt,
+                blocks.coarse_dirt, blocks.podzol}
+    sand_ids = {blocks.sand, blocks.red_sand}
+    tree_ground = soil_ids | {blocks.snow_block}   # spruce is fine on snow
+
+    def ground(wx, wz, sy):
+        return _block_at(store, wx, sy, wz)
+
     # Trees (sparse by default -- roughly a third of the old density).
     n_trees = 0
     if tree_kinds and cfg.tree_density > 0:
@@ -628,35 +646,36 @@ def decorate_island(store, blocks, cfg, isl, surface_cols, rng):
         n_trees = min(n_trees, max(0, len(surface_cols) // 20))
     for _ in range(n_trees):
         wx, wz, sy = rng.choice(surface_cols)
-        # keep trees off the very edge and away from centre spawn
-        _tree(store, blocks, wx, wz, sy + 1, rng.choice(tree_kinds), rng)
+        if ground(wx, wz, sy) in tree_ground:
+            _tree(store, blocks, wx, wz, sy + 1, rng.choice(tree_kinds), rng)
 
-    # Rocks / boulders (sparse).
+    # Rocks / boulders (sparse) -- fine on any solid ground.
     n_rocks = int(area * 0.00133 * cfg.rock_density * rng.uniform(0.5, 1.2))
     for _ in range(n_rocks):
         wx, wz, sy = rng.choice(surface_cols)
         _rock(store, blocks, wx, wz, sy + 1, rng)
 
-    # Foliage (grass, flowers, cactus/dead bush for desert).
+    # Foliage -- only ever on natural ground blocks (grass/dirt for plants,
+    # sand for cactus), never on exposed ore or stone.
     if cfg.foliage_density > 0:
         n_foliage = int(area * 0.05 * cfg.foliage_density)
         for _ in range(n_foliage):
             wx, wz, sy = rng.choice(surface_cols)
+            gid = ground(wx, wz, sy)
             top = sy + 1
             if style == "desert":
-                if rng.chance(0.2):
+                if gid in sand_ids and rng.chance(0.25):
                     h = rng.randint(1, 3)
                     for i in range(h):
                         _set(store, blocks, wx, top + i, wz, blocks.cactus, True)
-                elif rng.chance(0.4):
+                elif gid in sand_ids and rng.chance(0.4):
                     _set(store, blocks, wx, top, wz, blocks.dead_bush, True)
             elif style == "badlands":
-                if rng.chance(0.35):
+                if gid in (sand_ids | soil_ids) and rng.chance(0.35):
                     _set(store, blocks, wx, top, wz, blocks.dead_bush, True)
             elif style == "snowy":
-                if rng.chance(0.3):
-                    _set(store, blocks, wx, top, wz, blocks.short_grass, True)
-            else:
+                pass   # snow surface: keep it clean (no floating grass)
+            elif gid in soil_ids:
                 r = rng.rand()
                 if r < 0.6:
                     _set(store, blocks, wx, top, wz, blocks.short_grass, True)
@@ -762,46 +781,38 @@ def plan_cluster(cfg: SkywarsConfig, spawn_count: int, cx: int, cz: int,
                  cluster_seed: int) -> Tuple[List[Island], dict]:
     """Return islands (positioned at world coords) + a positions dict."""
     rng = Rng(cluster_seed, 0xC1057E5)
-    Rmain = cfg.main_size
-    Rm = cfg.middle_size
-    Rs = cfg.spawn_size
-    gap = max(4, cfg.island_gap)      # target air gap between neighbouring island edges
+    Rmain = float(cfg.main_size)
+    Rm = float(cfg.middle_size)
+    Rs_cfg = float(cfg.spawn_size)
+    gap = float(max(4, cfg.island_gap))   # target void gap between island edges
+    Rs_min = 9.0                          # smallest a spawn island may shrink to
+    two_pi = 2 * math.pi
 
-    # Innermost middle ring hugs the main island (edge gap == `gap`).
-    Rmid = Rmain + Rm + gap
+    # Exactly ONE ring of middle islands. Ideally it hugs the main island with a
+    # `gap` void, and the spawn ring hugs it with a `gap` void -- giving the
+    # consistent spawn -> middle -> main spacing we want. As the spawn count
+    # grows we first shrink the spawn islands so the ring stays tight; once they
+    # hit the minimum size we let the ring grow and slide the middle ring outward
+    # so both gaps stay equal (proportional) instead of one ballooning.
+    Rmid_hug = Rmain + Rm + gap
+    B = Rmid_hug + Rm + gap               # spawn-ring radius if gaps are both `gap`
+    denom = 2 * spawn_count - two_pi
+    Rs = Rs_cfg
+    if denom > 1e-6:
+        # spawn radius that fits `spawn_count` with tangential AND radial gap == gap
+        Rs = min(Rs_cfg, (two_pi * B - spawn_count * gap) / denom)
 
-    # Spawn ring hugs the middle field, only growing outward if there are too
-    # many spawn islands to fit around it without overlapping each other. The
-    # fit radius uses a slightly inflated island size so per-island jitter never
-    # makes neighbours touch.
-    Rring = max(Rmid + Rm + Rs + gap, _ring_radius(spawn_count, Rs * 1.05, gap))
-
-    # Middle field: one or more concentric dense rings filling the band between
-    # the main island and the spawn ring, so bridge distances stay short even on
-    # big maps (and the diagonals / corners get covered). Rings are spaced evenly
-    # so the outermost one sits exactly `gap` from the spawn ring.
-    mid_step = 2 * Rm + gap            # comfortable centre-to-centre ring spacing
-    mid_min_spacing = 2 * Rm + 6       # never stack rings closer than this (no overlap)
-    r_in = float(Rmid)                 # inner ring: hugs the main island
-    # outer ring: as close to the spawn ring as it can get (with jitter headroom)
-    r_out = Rring - Rs * 1.05 - gap - Rm * 1.05
-    span = r_out - r_in
-
-    def ring_cap(r):
-        c = max(4, int(math.floor(2 * math.pi * r / (2 * Rm * 1.06 + gap))))
-        return max(4, min(c, int(round(c * cfg.middle_ratio))))
-
-    # mid_levels: list of (radius, count|None). A band narrower than one island
-    # diameter can only hold a single row, so we centre it to balance the bridge
-    # distance to the main and spawn rings; wider bands get evenly spaced rings.
-    if span <= 1.0:
-        mid_levels = [(r_in, None)]
-    elif span < mid_min_spacing:
-        mid_levels = [(0.5 * (r_in + r_out), None)]
+    if Rs >= Rs_min:
+        Rmid = Rmid_hug
+        Rring = Rmid + Rm + gap + Rs
     else:
-        n_gaps = max(1, min(int(round(span / mid_step)), int(span // mid_min_spacing)))
-        spacing = span / n_gaps
-        mid_levels = [(r_in + spacing * i, None) for i in range(n_gaps + 1)]
+        Rs = Rs_min
+        Rring = max(Rmid_hug + Rm + gap + Rs, _ring_radius(spawn_count, Rs, gap))
+        Rmid = max(Rmid_hug, 0.5 * (Rring - Rs + Rmain))   # balance both gaps
+
+    # Dense single middle ring.
+    n_mid = max(4, int(math.floor(two_pi * Rmid / (2 * Rm + gap))))
+    n_mid = max(4, min(n_mid, int(round(n_mid * cfg.middle_ratio))))
 
     islands: List[Island] = []
 
@@ -823,32 +834,26 @@ def plan_cluster(cfg: SkywarsConfig, spawn_count: int, cx: int, cz: int,
     islands.append(Island(cx, cz, Rmain, main_y, depth_for(Rmain),
                           pick_biome(1), "main"))
 
-    # Middle field (each ring dense; alternate rings half-staggered to fill gaps).
+    # Single middle ring, evenly spaced.
     salt = 10
-    outer_mid_a0 = 0.0
-    for ri, (rmid, count) in enumerate(mid_levels):
-        if count is None:
-            count = ring_cap(rmid)
-        a0 = rng.uniform(0, 2 * math.pi) + (math.pi / count if ri % 2 else 0.0)
-        outer_mid_a0 = a0
-        for i in range(count):
-            ang = a0 + 2 * math.pi * i / count
-            wx = int(round(cx + math.cos(ang) * rmid))
-            wz = int(round(cz + math.sin(ang) * rmid))
-            rad = Rm * rng.uniform(0.99, 1.01)
-            islands.append(Island(wx, wz, rad, surf_y(), depth_for(rad),
-                                  pick_biome(salt), "middle"))
-            salt += 1
+    a0 = rng.uniform(0, 2 * math.pi)
+    for i in range(n_mid):
+        ang = a0 + 2 * math.pi * i / n_mid
+        wx = int(round(cx + math.cos(ang) * Rmid))
+        wz = int(round(cz + math.sin(ang) * Rmid))
+        rad = Rm * rng.uniform(0.99, 1.01)
+        islands.append(Island(wx, wz, rad, surf_y(), depth_for(rad),
+                              pick_biome(salt), "middle"))
+        salt += 1
 
-    # Spawn ring. Start aligned to the outer middle ring so spawn islands sit
-    # near a middle island (short bridges) rather than in the angular gaps.
+    # Spawn ring, aligned to the middle ring so spawns sit near a middle island.
     spawn_islands: List[Island] = []
-    b0 = outer_mid_a0
+    b0 = a0                                # share the start angle with the middle ring
     for i in range(spawn_count):
         ang = b0 + 2 * math.pi * i / spawn_count
         wx = int(round(cx + math.cos(ang) * Rring))
         wz = int(round(cz + math.sin(ang) * Rring))
-        rad = Rs * rng.uniform(0.97, 1.03)
+        rad = Rs * rng.uniform(0.98, 1.02)
         isl = Island(wx, wz, rad, surf_y(), depth_for(rad),
                      pick_biome(100 + i), "spawn")
         islands.append(isl)

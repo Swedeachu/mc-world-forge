@@ -178,10 +178,10 @@ def _build_skywars_config(form):
         game_type=int(num("game_type", 0, int)),
         allow_commands=bool(form.get("allow_commands", True)),
         batches=batches,
-        main_size=max(8, min(200, int(num("main_size", 73, int)))),
-        middle_size=max(6, min(140, int(num("middle_size", 36, int)))),
+        main_size=max(8, min(200, int(num("main_size", 52, int)))),
+        middle_size=max(6, min(140, int(num("middle_size", 21, int)))),
         spawn_size=max(5, min(120, int(num("spawn_size", 26, int)))),
-        island_gap=max(4, min(60, int(num("island_gap", 16, int)))),
+        island_gap=max(4, min(80, int(num("island_gap", 12, int)))),
         middle_ratio=max(0.2, min(1.0, num("middle_ratio", 1.0))),
         base_y=int(num("base_y", 90, int)),
         height_jitter=max(0, min(40, int(num("height_jitter", 0, int)))),
@@ -194,9 +194,9 @@ def _build_skywars_config(form):
         ore_density=max(0.0, num("ore_density", 1.0)),
         surface_ore=max(0.0, num("surface_ore", 1.0)),
         ores=ores,
-        chests_per_spawn=max(0, min(120, int(num("chests_per_spawn", 15, int)))),
-        chests_per_middle=max(0, min(120, int(num("chests_per_middle", 10, int)))),
-        ender_chests_main=max(0, min(200, int(num("ender_chests_main", 25, int)))),
+        chests_per_spawn=max(0, min(120, int(num("chests_per_spawn", 5, int)))),
+        chests_per_middle=max(0, min(120, int(num("chests_per_middle", 5, int)))),
+        ender_chests_main=max(0, min(200, int(num("ender_chests_main", 10, int)))),
     )
     workers = int(num("workers", 0, int))
     workers = max(0, min(64, workers))
