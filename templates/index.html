@@ -236,9 +236,9 @@
               <input type="number" id="floor_y" value="-20">
               <span class="hint">void below this</span></div>
             <div class="field"><label>Water level Y</label>
-              <input type="number" id="water_level" value="62"></div>
+              <input type="number" id="water_level" value="130"></div>
             <div class="field"><label>Base land height Y</label>
-              <input type="number" id="base_height" value="71"></div>
+              <input type="number" id="base_height" value="140"></div>
           </div>
         </div>
       </div>
@@ -251,11 +251,11 @@
             <span class="val" id="mountain_amount_v">0.50</span></div>
             <input type="range" id="mountain_amount" min="0" max="1" step="0.05" value="0.5"></div>
           <div class="field"><label>Mountain height (blocks)</label>
-            <input type="number" id="mountain_amp" value="70"></div>
+            <input type="number" id="mountain_amp" value="48"></div>
           <div class="field"><label>Rolling-hill height</label>
             <input type="number" id="hill_amp" value="12"></div>
           <div class="field"><label>Snow line Y</label>
-            <input type="number" id="snowline_y" value="95"></div>
+            <input type="number" id="snowline_y" value="172"></div>
         </div></div>
       </div>
 
@@ -316,6 +316,31 @@
             <th>Vein size</th><th>Depth bias</th><th></th>
           </tr></thead><tbody id="orebody"></tbody></table>
           <button type="button" class="addrow" id="addore">+ add ore</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="hd"><span class="ix">07</span>
+          <div><h3>Underworld &amp; structures</h3>
+            <p>cave down past bedrock into the deep dark, then the nether</p></div></div>
+        <div class="bd">
+          <div class="grid">
+            <div class="field check"><input type="checkbox" id="deep_dark">
+              <label for="deep_dark">Deep dark layer (deepslate &amp; sculk)</label></div>
+            <div class="field check"><input type="checkbox" id="nether">
+              <label for="nether">Nether layer (netherrack, lava, nether biomes)</label></div>
+            <div class="field check"><input type="checkbox" id="structures">
+              <label for="structures">Generate structures (pyramid, village, fortress…)</label></div>
+            <div class="field"><label>World height mode</label>
+              <select id="height_mode">
+                <option value="compact">Compact (standard −64…319)</option>
+                <option value="tall">Tall (extended world via datapack)</option>
+              </select>
+              <span class="hint">tall raises the surface to fit the extra layers</span></div>
+          </div>
+          <p style="margin:12px 0 0;color:var(--faint);font-size:12px">
+            A <code>world_map.json</code> is bundled in the zip listing the midpoint of every
+            biome region (overworld + nether) and every structure.</p>
         </div>
       </div>
     </div>
@@ -607,7 +632,9 @@ function collect(){
     trees:$("trees").checked,tree_density:+$("tree_density").value,
     decorations:$("decorations").checked,
     wall:$("wall").checked,wall_min_y:+$("wall_min_y").value,
-    wall_max_y:+$("wall_max_y").value,ores};
+    wall_max_y:+$("wall_max_y").value,
+    deep_dark:$("deep_dark").checked,nether:$("nether").checked,
+    structures:$("structures").checked,height_mode:$("height_mode").value,ores};
 }
 
 /* ---------- run ---------- */

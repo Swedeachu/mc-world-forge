@@ -27,6 +27,8 @@ from typing import List, Dict, Callable, Optional
 
 import nbt
 import noise
+import underworld
+import structures
 from region import RegionWriter, build_chunk
 
 # Fixed vertical layout (standard overworld dimension range).
@@ -116,6 +118,84 @@ class Blocks:
         self.diorite = g(_bkey("minecraft:diorite"))
         self.granite = g(_bkey("minecraft:granite"))
         self.andesite = g(_bkey("minecraft:andesite"))
+
+        # Deep dark
+        self.deepslate = g(_bkey("minecraft:deepslate", {"axis": "y"}))
+        self.tuff = g(_bkey("minecraft:tuff"))
+        self.cobbled_deepslate = g(_bkey("minecraft:cobbled_deepslate"))
+        self.sculk = g(_bkey("minecraft:sculk"))
+        self.sculk_vein = g(_bkey("minecraft:sculk_vein",
+                                  {"up": "true", "down": "false", "north": "false",
+                                   "south": "false", "east": "false", "west": "false"}))
+        self.sculk_sensor = g(_bkey("minecraft:sculk_sensor"))
+        self.sculk_shrieker = g(_bkey("minecraft:sculk_shrieker", {"can_summon": "true"}))
+        self.sculk_catalyst = g(_bkey("minecraft:sculk_catalyst"))
+        self.reinforced_deepslate = g(_bkey("minecraft:reinforced_deepslate"))
+        self.deepslate_bricks = g(_bkey("minecraft:deepslate_bricks"))
+        self.deepslate_tiles = g(_bkey("minecraft:deepslate_tiles"))
+        self.cracked_deepslate_bricks = g(_bkey("minecraft:cracked_deepslate_bricks"))
+        self.polished_deepslate = g(_bkey("minecraft:polished_deepslate"))
+
+        # Nether
+        self.netherrack = g(_bkey("minecraft:netherrack"))
+        self.soul_sand = g(_bkey("minecraft:soul_sand"))
+        self.soul_soil = g(_bkey("minecraft:soul_soil"))
+        self.magma = g(_bkey("minecraft:magma_block"))
+        self.glowstone = g(_bkey("minecraft:glowstone"))
+        self.basalt = g(_bkey("minecraft:basalt", {"axis": "y"}))
+        self.blackstone = g(_bkey("minecraft:blackstone"))
+        self.gilded_blackstone = g(_bkey("minecraft:gilded_blackstone"))
+        self.crimson_nylium = g(_bkey("minecraft:crimson_nylium"))
+        self.warped_nylium = g(_bkey("minecraft:warped_nylium"))
+        self.nether_wart_block = g(_bkey("minecraft:nether_wart_block"))
+        self.warped_wart_block = g(_bkey("minecraft:warped_wart_block"))
+        self.crimson_stem = g(_bkey("minecraft:crimson_stem", {"axis": "y"}))
+        self.warped_stem = g(_bkey("minecraft:warped_stem", {"axis": "y"}))
+        self.shroomlight = g(_bkey("minecraft:shroomlight"))
+        self.nether_bricks = g(_bkey("minecraft:nether_bricks"))
+        self.nether_quartz_ore = g(_bkey("minecraft:nether_quartz_ore"))
+        self.nether_gold_ore = g(_bkey("minecraft:nether_gold_ore"))
+        self.ancient_debris = g(_bkey("minecraft:ancient_debris"))
+        self.polished_blackstone_bricks = g(_bkey("minecraft:polished_blackstone_bricks"))
+
+        # Structure blocks
+        self.cobblestone = g(_bkey("minecraft:cobblestone"))
+        self.stone_bricks = g(_bkey("minecraft:stone_bricks"))
+        self.mossy_stone_bricks = g(_bkey("minecraft:mossy_stone_bricks"))
+        self.cracked_stone_bricks = g(_bkey("minecraft:cracked_stone_bricks"))
+        self.chiseled_stone_bricks = g(_bkey("minecraft:chiseled_stone_bricks"))
+        self.stone_brick_wall = g(_bkey("minecraft:stone_bricks"))
+        self.oak_planks = g(_bkey("minecraft:oak_planks"))
+        self.spruce_planks = g(_bkey("minecraft:spruce_planks"))
+        self.cobblestone_stairs = g(_bkey("minecraft:cobblestone"))
+        self.glass = g(_bkey("minecraft:glass"))
+        self.bookshelf = g(_bkey("minecraft:bookshelf"))
+        self.torch = g(_bkey("minecraft:torch"))
+        self.lantern = g(_bkey("minecraft:lantern", {"hanging": "false"}))
+        self.soul_lantern = g(_bkey("minecraft:soul_lantern", {"hanging": "false"}))
+        self.cobweb = g(_bkey("minecraft:cobweb"))
+        self.chiseled_sandstone = g(_bkey("minecraft:chiseled_sandstone"))
+        self.cut_sandstone = g(_bkey("minecraft:cut_sandstone"))
+        self.smooth_sandstone = g(_bkey("minecraft:smooth_sandstone"))
+        self.blue_terracotta = g(_bkey("minecraft:blue_terracotta"))
+        self.polished_blackstone = g(_bkey("minecraft:polished_blackstone"))
+        self.chiseled_polished_blackstone = g(_bkey("minecraft:chiseled_polished_blackstone"))
+        self.gold_block = g(_bkey("minecraft:gold_block"))
+        self.nether_wart_plant = g(_bkey("minecraft:nether_wart", {"age": "3"}))
+        self.spawner = g(_bkey("minecraft:spawner"))
+        self.iron_bars = g(_bkey("minecraft:iron_bars",
+                                 {"north": "false", "south": "false", "east": "false",
+                                  "west": "false", "waterlogged": "false"}))
+        self.nether_brick_fence = g(_bkey("minecraft:nether_brick_fence",
+                                          {"north": "false", "south": "false",
+                                           "east": "false", "west": "false",
+                                           "waterlogged": "false"}))
+        self.chest_face = {f: g(_bkey("minecraft:chest",
+                                      {"facing": f, "type": "single", "waterlogged": "false"}))
+                           for f in ("north", "south", "east", "west")}
+        self.portal_frame = {f: g(_bkey("minecraft:end_portal_frame",
+                                         {"eye": "false", "facing": f}))
+                             for f in ("north", "south", "east", "west")}
 
         # plants -- short grass was renamed grass -> short_grass in 1.20.3 (3698)
         sg = "minecraft:short_grass" if data_version >= 3698 else "minecraft:grass"
@@ -240,14 +320,14 @@ class WorldConfig:
     data_version: int = 3465          # 1.20.1
     version_name: str = "1.20.1"
 
-    floor_y: int = -20                # bedrock floor; void below
-    water_level: int = 62
-    base_height: int = 71
+    floor_y: int = -20                # overworld bottom; underworld/void below
+    water_level: int = 130
+    base_height: int = 140            # raised so the underworld layers get room below
     hill_amp: float = 12.0
-    mountain_amp: float = 70.0
+    mountain_amp: float = 48.0
     mountain_amount: float = 0.5       # 0..1, higher => more/higher mountains
     extreme_mountain_amount: float = 0.35  # sparse local mountain ranges
-    snowline_y: int = 95
+    snowline_y: int = 172
 
     caves: bool = True
     cave_intensity: float = 1.0
@@ -280,6 +360,15 @@ class WorldConfig:
 
     game_type: int = 0                # 0 survival, 1 creative
     allow_commands: bool = True
+
+    # Underworld layers stacked below the overworld floor (cave straight down).
+    deep_dark: bool = False           # deepslate/tuff/sculk band below the caverns
+    deep_dark_height: int = 22
+    nether: bool = False              # netherrack "hell" band at the very bottom
+    nether_height: int = 40
+    structures: bool = False          # scatter recognizable structures
+    height_mode: str = "compact"      # "compact" (std range) | "tall" (datapack)
+    structure_plan: Optional[list] = None   # filled by generate_world before workers run
 
     ores: List[OreCfg] = field(default_factory=_default_ores)
 
@@ -591,13 +680,21 @@ def _terrain_height_fields(cfg, X, Z):
     range_detail = (noise.fbm2d(X - 9100, Z + 4200, s + 16, octaves=3, freq=1 / 48.0) - 0.5) * 2.0
     extreme = range_gate * (range_ridge * 0.82 + np.maximum(0.0, range_detail) * 0.18)
 
+    # Rocky detail that only shows up on the mountains (keeps flats calm) so peaks
+    # read as craggy stone instead of smooth grey domes.
+    mnt_rough = (noise.fbm2d(X + 4100, Z - 2700, s + 21, octaves=4, freq=1 / 20.0) - 0.5) * 2.0
+    mnt_medium = (noise.fbm2d(X - 6200, Z + 1500, s + 22, octaves=3, freq=1 / 46.0) - 0.5) * 2.0
+    mnt_shape = np.clip(np.maximum(mnt, extreme * 0.92), 0.0, 1.0)
+
     Hf = (cfg.base_height
           + hills * cfg.hill_amp
           + detail * 2.6
           + mnt * cfg.mountain_amp
           + (mnt ** 1.3) * ridge * cfg.mountain_amp * 0.5
-          + extreme * cfg.mountain_amp * 0.95)
-    mnt = np.clip(np.maximum(mnt, extreme * 0.92), 0.0, 1.0)
+          + extreme * cfg.mountain_amp * 0.95
+          + mnt_shape * (mnt_medium * cfg.mountain_amp * 0.22
+                         + mnt_rough * cfg.mountain_amp * 0.12))
+    mnt = mnt_shape
     return Hf, mnt
 
 
@@ -631,6 +728,15 @@ def _fields(cfg, blocks, X, Z):
         mesa_terrace = np.floor((Hf + (noise.fbm2d(X + 1024, Z - 2048, s + 89, octaves=2, freq=1 / 54.0) - 0.5) * 9.0) / 3.0) * 3.0 - Hf
         Hf += mesa_lift * (mesa_ribs * 10.5 + mesa_terrace * 0.32)
         mnt = np.clip(np.maximum(mnt, mesa_lift * 0.28), 0.0, 1.0)
+
+    # Plains read best when they are calm and open: pull their surface toward the
+    # base height so they roll gently instead of bumping around like forest. The
+    # deviation is only softened (not flattened to a slab), so borders with other
+    # biomes still transition naturally and it keeps a vanilla look.
+    is_plainsy = (biome == "minecraft:plains") | (biome == "minecraft:snowy_plains")
+    if is_plainsy.any():
+        softened = cfg.base_height + (Hf - cfg.base_height) * 0.55
+        Hf = np.where(is_plainsy, softened, Hf)
 
     is_desert = biome == "minecraft:desert"
     is_badlands = biome == "minecraft:badlands"
@@ -847,6 +953,16 @@ def generate_chunk(cfg, blocks, biome_reg, cx, cz, xmin, xmax, rng_seed):
         ok = (block_ids[syy, szz, sxx] == 0) & (below != 0) & (below != blocks.water)
         block_ids[syy[ok], szz[ok], sxx[ok]] = blocks.snow_layer
 
+    # --- underworld: deep dark + nether below the overworld floor -------
+    if (cfg.deep_dark or cfg.nether) and inside.any():
+        underworld.apply_underworld(cfg, blocks, block_ids, X, Z, inside, on_wall, rng)
+
+    # --- structures (stamp the parts overlapping this chunk) ------------
+    block_entities = []
+    if cfg.structures and cfg.structure_plan and inside.any():
+        block_entities = structures.stamp_structures(
+            cfg, blocks, block_ids, cx, cz, MIN_Y, WORLD_HEIGHT)
+
     # --- bedrock wall ---------------------------------------------------
     if cfg.wall and on_wall.any():
         wmin = max(MIN_Y, cfg.wall_min_y)
@@ -861,7 +977,7 @@ def generate_chunk(cfg, blocks, biome_reg, cx, cz, xmin, xmax, rng_seed):
             b = biome_str[iz, ix] if inside[iz, ix] else "minecraft:plains"
             biome_ids[iz, ix] = biome_reg.get(b)
 
-    return block_ids, biome_ids, H, biome_str, inside, is_water
+    return block_ids, biome_ids, H, biome_str, inside, is_water, block_entities
 
 
 # ---------------------------------------------------------------------------
@@ -2205,11 +2321,12 @@ def _generate_region_worker(args):
     for cz in range(czmin, czmax + 1):
         for cx in range(cxmin, cxmax + 1):
             rng_seed = _chunk_rng_seed(cfg.seed, cx, cz)
-            block_ids, biome_ids, H, biome_str, inside, is_water = generate_chunk(
+            block_ids, biome_ids, H, biome_str, inside, is_water, block_entities = generate_chunk(
                 cfg, blocks, biome_reg, cx, cz, xmin, xmax, rng_seed)
 
             root = build_chunk(cx, cz, block_ids, biome_ids, block_palette,
-                               biome_palette, cfg.data_version, MIN_SECTION, N_SECTIONS)
+                               biome_palette, cfg.data_version, MIN_SECTION, N_SECTIONS,
+                               block_entities=block_entities)
             rw.add_chunk(cx, cz, root)
 
             chunk_patch = _chunk_preview_patch(cfg, cx, cz, xmin, pscale, preview_size,
@@ -2270,11 +2387,12 @@ def _generate_tile_worker(args):
     for cz in range(czmin, czmax + 1):
         for cx in range(cxmin, cxmax + 1):
             rng_seed = _chunk_rng_seed(cfg.seed, cx, cz)
-            block_ids, biome_ids, H, biome_str, inside, is_water = generate_chunk(
+            block_ids, biome_ids, H, biome_str, inside, is_water, block_entities = generate_chunk(
                 cfg, blocks, biome_reg, cx, cz, xmin, xmax, rng_seed)
 
             root = build_chunk(cx, cz, block_ids, biome_ids, block_palette,
-                               biome_palette, cfg.data_version, MIN_SECTION, N_SECTIONS)
+                               biome_palette, cfg.data_version, MIN_SECTION, N_SECTIONS,
+                               block_entities=block_entities)
             compressed_chunks.append((cx, cz, nbt.to_zlib("", root)))
 
             chunk_patch = _chunk_preview_patch(cfg, cx, cz, xmin, pscale, preview_size,
@@ -2321,6 +2439,14 @@ def generate_world(cfg: WorldConfig, out_dir: str,
     xmin = -(cfg.size // 2)
     xmax = xmin + cfg.size - 1
     cfg = _tune_biomes(cfg, xmin, xmax)
+
+    # Plan biome centers + structures up front so the parallel workers can stamp
+    # any structure that overlaps their chunk (structures cross chunk borders).
+    report(0.0, "Mapping biomes & planning structures...")
+    biome_midpoints = compute_biome_midpoints(cfg)
+    layer_info = underworld.layer_starts(cfg)
+    cfg.structure_plan = structures.plan_structures(cfg, biome_midpoints, layer_info)
+
     cxmin, cxmax = xmin >> 4, xmax >> 4
     czmin, czmax = xmin >> 4, xmax >> 4
     total_chunks = (cxmax - cxmin + 1) * (czmax - czmin + 1)
@@ -2487,7 +2613,81 @@ def generate_world(cfg: WorldConfig, out_dir: str,
         "job_mode": "tile" if use_tile_jobs else "region",
         "spawn": (0, spawn_y, 0), "bounds": (xmin, xmax),
         "seconds": round(time.time() - t0, 1), "preview": preview,
+        "biome_midpoints": biome_midpoints,
+        "structures": cfg.structure_plan or [],
+        "layer_starts": layer_info,
     }
+
+
+def compute_biome_midpoints(cfg, max_cells=96):
+    """Coarse-sample the world and return the midpoint of every contiguous biome
+    region (overworld + nether). Multiple regions of the same biome are listed
+    separately. Returns [{'biome', 'x', 'y', 'z', 'blocks'}]."""
+    blocks, _ = _prepare_palettes(cfg)
+    xmin = -(cfg.size // 2)
+    xmax = xmin + cfg.size - 1
+    n = int(min(max_cells, max(8, cfg.size // 16)))
+    xs = np.linspace(xmin + 0.5, xmax - 0.5, n)
+    zs = np.linspace(xmin + 0.5, xmax - 0.5, n)
+    X, Z = np.meshgrid(xs, zs)                      # [z, x]
+    step = (xmax - xmin) / max(1, n - 1)
+    cell_area = step * step
+    min_cells = 3
+
+    out = []
+    f = _fields(cfg, blocks, X, Z)
+    out += _region_centroids(f["biome"], X, Z, f["H"], step, cell_area, min_cells)
+
+    if cfg.nether:
+        nbm = underworld.nether_biome_map(cfg, X, Z)
+        names = np.array(underworld.NETHER_BIOMES)
+        neth_names = names[nbm]
+        segs = underworld._segments(cfg)
+        neth_y = cfg.floor_y - cfg.deep_dark_height // 2
+        for seg in segs:
+            if seg[0] == "nether":
+                neth_y = (seg[1] + seg[2]) // 2
+        Hn = np.full(X.shape, neth_y)
+        out += _region_centroids(neth_names, X, Z, Hn, step, cell_area, min_cells)
+
+    return out
+
+
+def _region_centroids(biome, X, Z, H, step, cell_area, min_cells):
+    """Flood-fill contiguous equal-biome cells; emit one midpoint per region."""
+    n_z, n_x = biome.shape
+    seen = np.zeros((n_z, n_x), dtype=bool)
+    results = []
+    for z0 in range(n_z):
+        for x0 in range(n_x):
+            if seen[z0, x0]:
+                continue
+            target = biome[z0, x0]
+            stack = [(z0, x0)]
+            seen[z0, x0] = True
+            cells = []
+            while stack:
+                z, x = stack.pop()
+                cells.append((z, x))
+                for dz, dx in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                    nz, nx = z + dz, x + dx
+                    if 0 <= nz < n_z and 0 <= nx < n_x and not seen[nz, nx] \
+                            and biome[nz, nx] == target:
+                        seen[nz, nx] = True
+                        stack.append((nz, nx))
+            if len(cells) < min_cells:
+                continue
+            czs = [c[0] for c in cells]
+            cxs = [c[1] for c in cells]
+            mx = int(round(float(np.mean([X[z, x] for z, x in cells]))))
+            mz = int(round(float(np.mean([Z[z, x] for z, x in cells]))))
+            my = int(round(float(np.mean([H[z, x] for z, x in cells]))))
+            results.append({
+                "biome": str(target),
+                "x": mx, "y": my, "z": mz,
+                "blocks": int(round(len(cells) * cell_area)),
+            })
+    return results
 
 
 def _write_region_result(region_dir, result):

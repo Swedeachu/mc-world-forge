@@ -122,6 +122,10 @@ def _build_config(form):
         wall_max_y=int(num("wall_max_y", 319, int)),
         game_type=int(num("game_type", 0, int)),
         allow_commands=bool(form.get("allow_commands", True)),
+        deep_dark=bool(form.get("deep_dark", False)),
+        nether=bool(form.get("nether", False)),
+        structures=bool(form.get("structures", False)),
+        height_mode=str(form.get("height_mode", "compact")).strip() or "compact",
         ores=ores,
     )
     workers = int(num("workers", 0, int))
@@ -221,6 +225,30 @@ def _run_vanilla_job(job, job_id, cfg, workers, progress, preview_progress):
     res = generate_world(cfg, out_dir, progress,
                          workers=workers or None,
                          preview_progress=preview_progress)
+
+    job["progress"] = 98.0
+    job["message"] = "Writing map JSON..."
+    xmin, xmax = res.get("bounds", (0, 0))
+    layer_starts = res.get("layer_starts", {}) or {}
+    structures = [{"type": s["type"], "x": s["x"], "y": s["y"], "z": s["z"]}
+                  for s in res.get("structures", [])]
+    map_json = {
+        "world": _safe_name(cfg.name),
+        "seed": cfg.seed,
+        "bounds": {"x_min": xmin, "x_max": xmax, "z_min": xmin, "z_max": xmax},
+        "spawn": list(res.get("spawn", (0, 64, 0))),
+        "layers": {
+            "deep_dark": {"enabled": bool(cfg.deep_dark),
+                          "start_y": layer_starts.get("deep_dark")},
+            "nether": {"enabled": bool(cfg.nether),
+                       "start_y": layer_starts.get("nether")},
+        },
+        "biomes": res.get("biome_midpoints", []),
+        "structures": structures,
+    }
+    with open(os.path.join(job_base, "world_map.json"), "w", encoding="utf-8") as fp:
+        json.dump(map_json, fp, indent=2)
+
     job["progress"] = 99.0
     job["message"] = "Zipping world..."
     zip_path = os.path.join(WORKROOT, job_id + ".zip")
