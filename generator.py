@@ -404,8 +404,15 @@ def _prepare_palettes(cfg: WorldConfig):
         blocks.leaves(kind)
 
     # Ores are user-configurable, so register the active set in config order.
+    # Deep-dark ores are placed after the deep-dark material palette pass, using
+    # deepslate ore variants. Register those up-front too so multiprocessing
+    # workers never create block IDs after their chunk palette snapshot has been
+    # taken. If a custom ore is not an *_ore block, _deep_dark_ore_name() returns
+    # it unchanged and Registry.get() deduplicates it normally.
     for ore in cfg.ores:
         blocks.ore(ore.name)
+        if cfg.deep_dark:
+            blocks.ore(_deep_dark_ore_name(ore.name))
 
     biome_reg = Registry()
     for biome in BIOME_COLORS:
@@ -1191,10 +1198,41 @@ def _fields_core(cfg, blocks, X, Z, smooth_heights):
 
     cold_relief = _smoothstep01(((cfg.biome_cold_cut + 0.14) - temp_band) / 0.34)
     cold_relief *= 1.0 - _smoothstep01((hum_band - 0.94) / 0.12)
+
+    frozen_paint = ((biome == "minecraft:snowy_plains") |
+                    (biome == "minecraft:snowy_taiga") |
+                    (biome == "minecraft:snowy_slopes")).astype(np.float64)
+    if frozen_paint.ndim == 2 and min(frozen_paint.shape) >= 3:
+        frozen_region = _soft_mask(frozen_paint, passes=4)
+    else:
+        frozen_region = frozen_paint
+
+    frozen_relief = _smoothstep01(((cfg.biome_frozen_cut + 0.070) - temp_band) / 0.20)
+    frozen_relief *= 1.0 - _smoothstep01((hum_band - 0.965) / 0.11)
+    frozen_relief = np.maximum(frozen_relief, frozen_region * 0.92)
+
     cold_lumps = (noise.fbm2d(X + 5100, Z - 5100, s + 74, octaves=3, freq=1 / 150.0) - 0.5) * 2.0
     cold_ridges = 1.0 - np.abs(noise.fbm2d(X - 9700, Z + 9700, s + 75, octaves=3, freq=1 / 220.0) - 0.5) * 2.0
     cold_ridges = _smoothstep01((cold_ridges - 0.24) / 0.66)
-    Hf += cold_relief * (cold_lumps * cfg.hill_amp * 0.38 + cold_ridges * cfg.mountain_amp * 0.20 * (0.30 + 0.70 * mnt))
+
+    snow_range = noise.fbm2d(X + 14800, Z - 11800, s + 176, octaves=4, freq=1 / 430.0)
+    snow_range = _smoothstep01((snow_range - 0.31) / 0.45)
+    snow_ridges = 1.0 - np.abs(noise.fbm2d(X - 18100, Z + 12700, s + 177, octaves=4, freq=1 / 185.0) - 0.5) * 2.0
+    snow_ridges = _smoothstep01((snow_ridges - 0.20) / 0.64) ** 1.14
+    snow_peaks = 1.0 - np.abs(noise.fbm2d(X + 22100, Z - 16100, s + 178, octaves=3, freq=1 / 92.0) - 0.5) * 2.0
+    snow_peaks = _smoothstep01((snow_peaks - 0.34) / 0.52) ** 1.28
+    snow_roll = (noise.fbm2d(X - 23300, Z + 17500, s + 179, octaves=3, freq=1 / 125.0) - 0.5) * 2.0
+
+    # Keep snow regions hillier than temperate lowlands, but do not let snow
+    # itself manufacture continent-sized cliff walls. This matches the older
+    # pre-extreme pass behavior while still allowing isolated rocky snowy peaks.
+    snow_alpine = frozen_relief * (0.52 + 0.48 * snow_range)
+    Hf += cold_relief * (cold_lumps * cfg.hill_amp * 0.30 + cold_ridges * cfg.mountain_amp * 0.14 * (0.30 + 0.70 * mnt))
+    Hf += snow_alpine * (snow_roll * cfg.hill_amp * 0.78 +
+                         snow_range * cfg.mountain_amp * 0.20 +
+                         snow_ridges * cfg.mountain_amp * 0.64 +
+                         snow_ridges * snow_peaks * cfg.mountain_amp * 0.74)
+    mnt = np.clip(np.maximum(mnt, snow_alpine * (snow_ridges * 0.70 + snow_peaks * 0.30)), 0.0, 1.0)
 
     if smooth_heights:
         lowland_flat = 1.0 - _smoothstep01((mnt - 0.14) / 0.24)
@@ -1301,6 +1339,15 @@ def _fields_core(cfg, blocks, X, Z, smooth_heights):
 
     # --- snow ----------------------------------------------------------
     frozen_land = (biome == "minecraft:snowy_plains") | (biome == "minecraft:snowy_taiga") | (biome == "minecraft:snowy_slopes")
+    if H.ndim == 2 and min(H.shape) >= 3:
+        hb = _blur_height_grid(H.astype(np.float64))
+        local_relief = np.abs(H.astype(np.float64) - hb)
+    else:
+        local_relief = np.zeros_like(H, dtype=np.float64)
+    alpine_snow = frozen_land & ((H >= cfg.base_height + 31) |
+                                 ((H >= cfg.base_height + 22) & ((mnt > 0.34) | (local_relief > 2.2))))
+    biome[alpine_snow] = "minecraft:snowy_slopes"
+    frozen_land = (biome == "minecraft:snowy_plains") | (biome == "minecraft:snowy_taiga") | (biome == "minecraft:snowy_slopes")
     is_snowy = (~is_arid) & (~is_water) & ((H >= cfg.snowline_y + 6) | frozen_land)
 
     # --- top + subsurface block per column -----------------------------
@@ -1312,6 +1359,13 @@ def _fields_core(cfg, blocks, X, Z, smooth_heights):
     top[(biome == "minecraft:snowy_plains")] = blocks.grass_snow
     top[biome == "minecraft:snowy_slopes"] = blocks.snow_block
     sub[biome == "minecraft:snowy_slopes"] = blocks.stone
+    snowy_rock_noise = noise.fbm2d(X - 27200, Z + 19100, s + 180, octaves=3, freq=1 / 68.0)
+    snowy_rock = ((biome == "minecraft:snowy_slopes") &
+                  ((H >= cfg.base_height + 76) |
+                   ((H >= cfg.base_height + 50) & ((mnt > 0.52) | (snowy_rock_noise > 0.54))) |
+                   (local_relief > 3.0)))
+    top[snowy_rock] = blocks.stone
+    sub[snowy_rock] = blocks.stone
     top[is_snowy & (top == blocks.grass)] = blocks.grass_snow
 
     top[is_desert] = blocks.sand
@@ -1412,7 +1466,8 @@ def generate_chunk(cfg, blocks, biome_reg, cx, cz, xmin, xmax, rng_seed):
     world_y = (np.arange(WORLD_HEIGHT) + MIN_Y).reshape(-1, 1, 1)
     inside3 = inside[None, :, :]
     Hs = H[None, :, :]
-    floor = cfg.floor_y
+    overworld_floor = cfg.floor_y
+    floor = MIN_Y if cfg.deep_dark else cfg.floor_y
     rng = np.random.default_rng(rng_seed)
 
     # --- columns: bedrock floor, stone body, subsurface, top -----------
@@ -1423,7 +1478,7 @@ def generate_chunk(cfg, blocks, biome_reg, cx, cz, xmin, xmax, rng_seed):
     block_ids[dirt_band] = sub3[dirt_band]
 
     if is_badlands.any():
-        _paint_badlands_bands(cfg, blocks, block_ids, X, Z, H, is_badlands, inside, world_y, floor)
+        _paint_badlands_bands(cfg, blocks, block_ids, X, Z, H, is_badlands, inside, world_y, overworld_floor)
 
     # --- stone variants + dirt/gravel pods (replace stone) -------------
     if cfg.stone_variants:
@@ -1447,7 +1502,9 @@ def generate_chunk(cfg, blocks, biome_reg, cx, cz, xmin, xmax, rng_seed):
 
     # --- caves ----------------------------------------------------------
     if cfg.caves:
-        _carve_caves(cfg, blocks, block_ids, X, Z, H, inside, floor)
+        _carve_caves(cfg, blocks, block_ids, X, Z, H, inside, overworld_floor)
+        if cfg.deep_dark:
+            _carve_deep_dark_with_regular_caverns(cfg, blocks, block_ids, X, Z, H, inside, floor)
     if cfg.ravines:
         _carve_ravines(cfg, blocks, block_ids, X, Z, H, inside, on_wall,
                        world_y, floor, is_water | is_lava, is_beach)
@@ -1507,11 +1564,15 @@ def generate_chunk(cfg, blocks, biome_reg, cx, cz, xmin, xmax, rng_seed):
     # inside generated ravines/caves.
     _settle_liquid_flow(cfg, blocks, block_ids, inside, floor)
 
+    if cfg.deep_dark:
+        underworld.apply_deep_dark_palette(cfg, blocks, block_ids, X, Z, inside, rng)
+
     # --- ores (replace stone, stone variants, or badlands terracotta) ---
     replaceable = (blocks.stone, blocks.andesite, blocks.diorite,
                    blocks.granite, blocks.terracotta, blocks.orange_terracotta,
                    blocks.yellow_terracotta, blocks.brown_terracotta,
-                   blocks.red_terracotta, blocks.white_terracotta)
+                   blocks.red_terracotta, blocks.white_terracotta,
+                   blocks.deepslate, blocks.tuff, blocks.cobbled_deepslate)
     for ore in cfg.ores:
         oid = blocks.ore(ore.name)
         y_lo = max(floor + 1, ore.y_min)
@@ -1526,6 +1587,9 @@ def generate_chunk(cfg, blocks, biome_reg, cx, cz, xmin, xmax, rng_seed):
             oy = _sample_y(rng, y_lo, hi, ore.bias)
             _place_blob(block_ids, ox, oy, oz, ore.vein_size, oid, rng, inside,
                         replaceable)
+
+    if cfg.deep_dark:
+        _place_deep_dark_ores(cfg, blocks, block_ids, H, inside, rng)
 
     # --- trees ----------------------------------------------------------
     if cfg.trees:
@@ -1546,10 +1610,6 @@ def generate_chunk(cfg, blocks, biome_reg, cx, cz, xmin, xmax, rng_seed):
         below = block_ids[syy - 1, szz, sxx]
         ok = (block_ids[syy, szz, sxx] == 0) & (below != 0) & (below != blocks.water)
         block_ids[syy[ok], szz[ok], sxx[ok]] = blocks.snow_layer
-
-    # --- underworld: deep dark below the overworld floor -----------------
-    if cfg.deep_dark and inside.any():
-        underworld.apply_underworld(cfg, blocks, block_ids, X, Z, inside, on_wall, rng)
 
     # --- structures (stamp the parts overlapping this chunk) ------------
     block_entities = []
@@ -1714,6 +1774,21 @@ def _carve_caves(cfg, blocks, block_ids, X, Z, H, inside, floor):
     # are local chunk features they often stop after a few blocks and create the
     # bad square dead-end holes seen from the surface. Surface openings now come
     # only from real feature-cell cave systems that continue across chunks.
+    _carve_underground_cave_networks(cfg, blocks, block_ids, X, Z, H, inside,
+                                     floor, target_y, intensity)
+
+
+def _carve_deep_dark_with_regular_caverns(cfg, blocks, block_ids, X, Z, H, inside, floor):
+    # Deep dark uses the same cave-carving primitives as the normal cavern
+    # layer. The only difference is the later palette pass, which swaps the
+    # lower rock to deepslate/tuff/sculk. This avoids the old separate deep-dark
+    # density field that created flat ceilings, bedrock-floor stadiums and a
+    # hard vertical drop from the cavern layer above.
+    intensity = max(0.2, float(cfg.cave_intensity))
+    target_y = max(floor + 8, min(cfg.floor_y - 12, _diamond_target_y(cfg, floor) - 26))
+
+    _carve_legacy_cave_noise(cfg, blocks, block_ids, X, Z, H, inside, floor,
+                             target_y, intensity)
     _carve_underground_cave_networks(cfg, blocks, block_ids, X, Z, H, inside,
                                      floor, target_y, intensity)
 
@@ -2460,6 +2535,61 @@ def _place_blob(block_ids, ox, oy, oz, size, target_id, rng, inside, replace_ids
                 placed += 1
 
 
+def _deep_dark_ore_name(name):
+    short = name.split(":", 1)[-1]
+    if short.startswith("deepslate_") or not short.endswith("_ore"):
+        return name
+    return f"minecraft:deepslate_{short}" if ":" in name else f"deepslate_{short}"
+
+
+def _place_deep_dark_ores(cfg, blocks, block_ids, H, inside, rng):
+    # The deep dark is now the same cave geometry as the regular cavern layer,
+    # only with a deeper material palette. Mirror the normal ore pass into that
+    # lower palette after sculk/deepslate conversion so ores cannot be wiped by
+    # the deep-dark skinning step. This intentionally ignores each ore's vanilla
+    # y-window: the custom deep-dark extension is extra playable space and should
+    # contain the same ore mix the cavern layer above has.
+    deep_lo = MIN_Y + 3
+    deep_hi = min(int(cfg.floor_y + 8), WORLD_HEIGHT + MIN_Y - 2)
+    if deep_hi < deep_lo:
+        return
+
+    replaceable = (blocks.deepslate, blocks.tuff, blocks.cobbled_deepslate,
+                   blocks.stone, blocks.andesite, blocks.diorite, blocks.granite)
+    replaceable_arr = np.array(replaceable, dtype=block_ids.dtype)
+    rock = np.isin(block_ids, replaceable_arr)
+    air = block_ids == blocks.air
+
+    near_air = np.zeros_like(rock, dtype=bool)
+    near_air[1:] |= air[:-1]
+    near_air[:-1] |= air[1:]
+    near_air[:, 1:, :] |= air[:, :-1, :]
+    near_air[:, :-1, :] |= air[:, 1:, :]
+    near_air[:, :, 1:] |= air[:, :, :-1]
+    near_air[:, :, :-1] |= air[:, :, 1:]
+
+    y_world = (np.arange(WORLD_HEIGHT) + MIN_Y)[:, None, None]
+    deep_zone = (y_world >= deep_lo) & (y_world <= deep_hi)
+    inside3 = inside[None, :, :]
+    exposed = rock & near_air & deep_zone & inside3
+    exposed_coords = np.argwhere(exposed)
+
+    for ore in cfg.ores:
+        oid = blocks.ore(_deep_dark_ore_name(ore.name))
+        veins = int(rng.poisson(max(0.0, ore.veins_per_chunk * 0.95)))
+        for _ in range(veins):
+            if exposed_coords.size > 0 and rng.random() < 0.72:
+                iy, oz, ox = exposed_coords[int(rng.integers(0, len(exposed_coords)))]
+                oy = int(iy + MIN_Y)
+            else:
+                ox, oz = int(rng.integers(0, 16)), int(rng.integers(0, 16))
+                if not inside[oz, ox]:
+                    continue
+                oy = _sample_y(rng, deep_lo, deep_hi, ore.bias)
+            _place_blob(block_ids, int(ox), int(oy), int(oz), ore.vein_size, oid, rng, inside,
+                        replaceable)
+
+
 # ---------------------------------------------------------------------------
 # Trees
 # ---------------------------------------------------------------------------
@@ -2959,6 +3089,11 @@ def _generate_region_worker(args):
                 block_ids, biome_ids, H, biome_str, inside, is_water, block_entities = generate_chunk(
                     cfg, blocks, biome_reg, cx, cz, ow_xmin, ow_xmax, rng_seed)
 
+            # Some generation passes still register optional block states lazily
+            # (for example custom ore names or rare decorations). Use the current
+            # palette after chunk generation so local block IDs are always backed
+            # by a block-state tag.
+            block_palette = blocks.palette()
             root = build_chunk(cx, cz, block_ids, biome_ids, block_palette,
                                biome_palette, cfg.data_version, MIN_SECTION, N_SECTIONS,
                                block_entities=block_entities)
@@ -3040,6 +3175,11 @@ def _generate_tile_worker(args):
                 block_ids, biome_ids, H, biome_str, inside, is_water, block_entities = generate_chunk(
                     cfg, blocks, biome_reg, cx, cz, ow_xmin, ow_xmax, rng_seed)
 
+            # Some generation passes still register optional block states lazily
+            # (for example custom ore names or rare decorations). Use the current
+            # palette after chunk generation so local block IDs are always backed
+            # by a block-state tag.
+            block_palette = blocks.palette()
             root = build_chunk(cx, cz, block_ids, biome_ids, block_palette,
                                biome_palette, cfg.data_version, MIN_SECTION, N_SECTIONS,
                                block_entities=block_entities)

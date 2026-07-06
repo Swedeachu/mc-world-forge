@@ -234,16 +234,12 @@ def _ancient_city(cfg, bl, ox, oy, oz, rng):
     # central dais
     b.box(ox - 3, ox + 3, oy - 1, oy, oz - 3, oz + 3, bricks)
     b.box(ox - 2, ox + 2, oy + 1, oy + 1, oz - 2, oz + 2, bl.reinforced_deepslate)
-    b.s(ox, oy + 1, oz, bl.sculk_catalyst)
-    # sculk spread + shriekers/sensors + soul lanterns
+    b.s(ox, oy + 1, oz, bl.sculk)
+    # sculk spread + soul lanterns; generated cities intentionally avoid
+    # sensors/shriekers/catalysts for this world style.
     for _ in range(120):
         x = rng.integers(ox - 11, ox + 12); z = rng.integers(oz - 11, oz + 12)
         b.s(x, oy - 1, z, bl.sculk)
-        r = rng.random()
-        if r < 0.04:
-            b.s(x, oy, z, bl.sculk_shrieker)
-        elif r < 0.09:
-            b.s(x, oy, z, bl.sculk_sensor)
     for dx, dz in ((-8, -8), (8, -8), (-8, 8), (8, 8), (0, 0)):
         b.s(ox + dx, oy + 3, oz + dz, bl.soul_lantern)
     b.chest(ox - 5, oy, oz, bl.chest_face["east"], LOOT["ancient_city"])
@@ -338,7 +334,6 @@ def plan_structures(cfg, biome_regions, layer_starts):
         return []
     xmin = -(cfg.size // 2)
     xmax = xmin + cfg.size - 1
-    overworld_bounds = (xmin, xmax, xmin, xmax)
 
     def regions_of(*names):
         return [r for r in biome_regions if r["biome"] in names]
@@ -350,11 +345,10 @@ def plan_structures(cfg, biome_regions, layer_starts):
 
     plan = []
 
-    def add(kind, x, y, z, bounds=None):
+    def add(kind, x, y, z):
         hx, hz = FOOTPRINT[kind]
-        bxmin, bxmax, bzmin, bzmax = bounds or overworld_bounds
-        x = int(max(bxmin + hx + 2, min(bxmax - hx - 2, x)))
-        z = int(max(bzmin + hz + 2, min(bzmax - hz - 2, z)))
+        x = int(max(xmin + hx + 2, min(xmax - hx - 2, x)))
+        z = int(max(xmin + hz + 2, min(xmax - hz - 2, z)))
         plan.append({"type": kind, "x": x, "y": int(y), "z": int(z),
                      "x0": x - hx, "x1": x + hx, "z0": z - hz, "z1": z + hz})
 
@@ -377,23 +371,20 @@ def plan_structures(cfg, biome_regions, layer_starts):
     sy = max(cfg.floor_y + 6, min(cfg.base_height - 24, cfg.floor_y + 10))
     add("stronghold", sx, sy, sz)
 
-    # Ancient city -> middle of the full deep dark volume.
+    # Ancient city -> deep dark band
     if layer_starts.get("deep_dark") is not None:
-        import generator
-        ay = (int(layer_starts["deep_dark"]) + generator.MIN_Y + 1) // 2
+        deep_dark_height = int(getattr(cfg, "deep_dark_height", 0) or (layer_starts["deep_dark"] - (-64)))
+        ay = layer_starts["deep_dark"] - max(10, deep_dark_height // 3)
         add("ancient_city", xmin + (xmax - xmin) * 3 // 5,
             ay, xmin + (xmax - xmin) * 2 // 5)
 
-    # Nether fortress + bastion -> separate Nether box to the right.
-    if cfg.nether:
-        import generator
-        nxmin, nxmax, nzmin, nzmax = generator.nether_bounds(cfg)
-        nbounds = (nxmin, nxmax, nzmin, nzmax)
-        ny = (generator.MIN_Y + generator.NETHER_BOX_CEILING_Y) // 2
-        add("nether_fortress", nxmin + (nxmax - nxmin) // 3, ny,
-            nzmin + (nzmax - nzmin) // 3, nbounds)
-        add("bastion", nxmin + (nxmax - nxmin) * 2 // 3, ny,
-            nzmin + (nzmax - nzmin) * 2 // 3, nbounds)
+    # Nether fortress + bastion -> nether band, separated
+    if layer_starts.get("nether") is not None:
+        ny = layer_starts["nether"] - max(6, cfg.nether_height // 3)
+        add("nether_fortress", xmin + (xmax - xmin) // 3, ny,
+            xmin + (xmax - xmin) // 3)
+        add("bastion", xmin + (xmax - xmin) * 2 // 3, ny,
+            xmin + (xmax - xmin) * 2 // 3)
 
     return plan
 
