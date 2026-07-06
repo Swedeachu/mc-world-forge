@@ -1,21 +1,20 @@
 """
 Underworld layers for the vanilla generator: below the overworld caverns the
-world can continue down through a Deep Dark band and then a Nether band, so a
-player can mine/cave straight down into "hell" (Terraria-style, but 3D).
+world can continue down through a full Deep Dark band, so a player can mine/cave
+straight down into wider sculk caverns.
 
 This is an original implementation (not copied from Minecraft's source); it just
 uses the same block ids so the result reads correctly in-game. All work happens
 on the chunk block array that generator.generate_chunk already built, rewriting
 everything at or below cfg.floor_y (which used to be a bedrock floor + void).
 
-Layer stack (compact mode), from the overworld floor downward:
+Layer stack from the overworld floor downward:
     [ overworld stone ]         (untouched, above cfg.floor_y)
-    [ Deep Dark ]  deepslate / tuff / sculk, carved caverns   (optional)
-    [ Nether ]     netherrack caverns, lava sea, nether biomes (optional)
+    [ Deep Dark ]  deepslate / tuff / sculk, widened caverns   (optional)
     [ bedrock floor at MIN_Y ]
 
-Nether biomes are chosen per-column from low-frequency noise and used to skin the
-exposed netherrack (nylium, soul sand, basalt, ...) and scatter features.
+The Nether generator in this file is still used by generator.py, but only for
+the separate horizontal Nether box. It is no longer stacked under the overworld.
 """
 import numpy as np
 
@@ -38,20 +37,13 @@ def underworld_bottom(cfg):
 
 
 def _segments(cfg):
-    """Return [(name, y_hi, y_lo)] inclusive bands, top-down, plus bedrock at MIN_Y."""
+    """Return [(name, y_hi, y_lo)] inclusive bands, top-down."""
     top = cfg.floor_y
     segs = []
-    cur_hi = top
     if cfg.deep_dark:
-        lo = max(MIN_Y + 1, cur_hi - cfg.deep_dark_height + 1)
-        if lo <= cur_hi:
-            segs.append(("deep_dark", cur_hi, lo))
-            cur_hi = lo - 1
-    if cfg.nether:
         lo = MIN_Y + 1
-        if lo <= cur_hi:
-            segs.append(("nether", cur_hi, lo))
-            cur_hi = lo - 1
+        if lo <= top:
+            segs.append(("deep_dark", top, lo))
     return segs
 
 
@@ -77,9 +69,7 @@ def nether_biome_map(cfg, X, Z):
 
 
 def apply_underworld(cfg, blocks, block_ids, X, Z, inside, on_wall, rng):
-    """Rewrite the chunk's block column at/below cfg.floor_y into the layers.
-
-    Returns a per-column nether biome id map ([z,x], -1 where no nether)."""
+    """Rewrite the chunk's block column at/below cfg.floor_y into the layers."""
     segs = _segments(cfg)
     neth_biome = np.full(X.shape, -1, dtype=np.int16)
     if not segs:
@@ -119,23 +109,18 @@ def apply_underworld(cfg, blocks, block_ids, X, Z, inside, on_wall, rng):
 
         if name == "deep_dark":
             _fill_deep_dark(cfg, blocks, block_ids, band, X3, Y3, Z3, inside_b, rng)
-        else:
-            nbm = nether_biome_map(cfg, X, Z)
-            neth_biome = np.where(inside, nbm, neth_biome)
-            _fill_nether(cfg, blocks, block_ids, band, X3, Y3, Z3, inside_b,
-                         yr, y_lo, y_hi, nbm, rng)
 
-    _connect_caves(cfg, blocks, block_ids, inside, segs)
+    _connect_caves(cfg, blocks, block_ids, X, Z, inside, segs)
     return neth_biome
 
 
-def _connect_caves(cfg, blocks, block_ids, inside, segs):
-    """Drill open connections so overworld caves flow straight into the deep dark
-    (and the deep dark into the nether) instead of dead-ending on a solid floor.
+def _connect_caves(cfg, blocks, block_ids, X, Z, inside, segs):
+    """Drill open connections so overworld caves flow into the deep dark.
 
-    Overworld caves bottom out a couple blocks above floor_y, leaving a thin solid
-    seal. For every column with a cave near the floor we punch from that cave air
-    down through the seal until we meet an open chamber in the layer below."""
+    This pass intentionally looks for existing air just above the layer and then
+    joins it to nearby deep-dark air. It is denser than before, but it still only
+    connects to real caverns instead of blindly boring columns through solid
+    deepslate."""
     if not segs:
         return
     top = segs[0][1]            # entry Y of the first underworld band (== floor_y)
@@ -145,31 +130,95 @@ def _connect_caves(cfg, blocks, block_ids, inside, segs):
     zz, xx = np.nonzero(inside)
     for i in range(zz.size):
         z, x = int(zz[i]), int(xx[i])
-        # lowest overworld cave air just above the layer (floor_y+1 .. floor_y+8)
+        wx = int(X[z, x])
+        wz = int(Z[z, x])
+
+        n = (wx * 0x632BE59B) ^ (wz * 0x85157AF5) ^ (int(cfg.seed) * 0x9E3779B1) ^ 0x3D2D5D7B
+        n &= 0xFFFFFFFF
+        n ^= (n >> 16)
+        n = (n * 0x7FEB352D) & 0xFFFFFFFF
+        if (n / 0xFFFFFFFF) > 0.18:
+            continue
+
         cave_y = None
-        for y in range(top + 1, top + 9):
+        for y in range(top + 1, top + 22):
+            if y < MIN_Y or y - MIN_Y >= block_ids.shape[0]:
+                continue
             if int(block_ids[y - MIN_Y, z, x]) == air:
                 cave_y = y
                 break
         if cave_y is None:
             continue
-        # carve down from the cave through the seal until we reach a chamber
-        y = cave_y - 1
-        drilled = 0
-        while y > bottom and drilled < 30:
-            b = int(block_ids[y - MIN_Y, z, x])
-            if b == air:
-                break                       # reached an existing cavern -> connected
-            if b in stop:
+
+        target = _find_nearby_deep_dark_air(block_ids, blocks, x, z, cave_y,
+                                            bottom, search_radius=6, depth=72)
+        if target is None:
+            continue
+
+        tx, ty, tz = target
+        _carve_connector(block_ids, blocks, x, cave_y - 1, z, tx, ty, tz, stop)
+
+
+def _find_nearby_deep_dark_air(block_ids, blocks, x, z, cave_y, bottom,
+                               search_radius, depth):
+    air = blocks.air
+    best = None
+    best_score = 1 << 30
+    scan_lo = max(bottom + 1, cave_y - depth)
+    for dz in range(-search_radius, search_radius + 1):
+        z2 = z + dz
+        if z2 < 0 or z2 >= 16:
+            continue
+        for dx in range(-search_radius, search_radius + 1):
+            x2 = x + dx
+            if x2 < 0 or x2 >= 16:
+                continue
+            dist = dx * dx + dz * dz
+            if dist > search_radius * search_radius:
+                continue
+            for y in range(cave_y - 1, scan_lo - 1, -1):
+                if int(block_ids[y - MIN_Y, z2, x2]) != air:
+                    continue
+                score = (cave_y - y) * 4 + dist * 7
+                if score < best_score:
+                    best_score = score
+                    best = (x2, y, z2)
                 break
-            block_ids[y - MIN_Y, z, x] = air
-            y -= 1
-            drilled += 1
+    return best
+
+
+def _carve_connector(block_ids, blocks, x0, y0, z0, x1, y1, z1, stop):
+    steps = max(abs(x1 - x0), abs(z1 - z0), abs(y1 - y0), 1)
+    for i in range(steps + 1):
+        t = i / steps
+        x = int(round(x0 + (x1 - x0) * t))
+        y = int(round(y0 + (y1 - y0) * t))
+        z = int(round(z0 + (z1 - z0) * t))
+        for dz in (-1, 0, 1):
+            z2 = z + dz
+            if z2 < 0 or z2 >= 16:
+                continue
+            for dx in (-1, 0, 1):
+                x2 = x + dx
+                if x2 < 0 or x2 >= 16:
+                    continue
+                if dx * dx + dz * dz > 1:
+                    continue
+                if y < MIN_Y or y - MIN_Y >= block_ids.shape[0]:
+                    continue
+                b = int(block_ids[y - MIN_Y, z2, x2])
+                if b not in stop:
+                    block_ids[y - MIN_Y, z2, x2] = blocks.air
 
 
 # ---------------------------------------------------------------------------
 # Deep Dark
 # ---------------------------------------------------------------------------
+
+def _smoothstep01(t):
+    t = np.clip(t, 0.0, 1.0)
+    return t * t * (3.0 - 2.0 * t)
+
 
 def _fill_deep_dark(cfg, blocks, block_ids, band, X3, Y3, Z3, inside_b, rng):
     s = cfg.seed
@@ -194,20 +243,420 @@ def _fill_deep_dark(cfg, blocks, block_ids, band, X3, Y3, Z3, inside_b, rng):
     mix = inside_b & (sub == blocks.deepslate) & (rs < p_stone * 0.7)
     sub[mix] = blocks.stone
 
-    # Carve open caverns (the "deep dark" chambers). The very top of the band is
-    # left more open so overworld caves drop straight into a chamber below.
-    cav = noise.fbm3d(X3, Y3 * 1.4, Z3, s + 613, octaves=3, freq=1 / 26.0)
-    cav2 = noise.fbm3d(X3 + 500, Y3, Z3 - 500, s + 614, octaves=2, freq=1 / 40.0)
-    rows = np.arange(nb)[:, None, None]
-    top_open = np.clip((rows - (nb - 5)) / 4.0, 0.0, 1.0)   # 0 lower, 1 at top row
-    thr = 0.085 + 0.13 * top_open
-    air_mask = inside_b & (np.abs(cav - 0.5) < thr) & (cav2 > 0.34 - 0.22 * top_open)
+    # Match the cavern layer above more closely: mostly 3D tunnel fields and
+    # connected cave graphs, scaled wider for the deep dark. Cheese/room masks are
+    # only accents now, otherwise the layer turns into a flat sculk hall.
+    rows = np.arange(nb)[:, None, None].astype(np.float64)
+    top01 = rows / max(1.0, float(nb - 1))             # 0 bottom .. 1 top
+    deep01 = 1.0 - _smoothstep01(top01)                # wider lower down
+
+    warp_x = (noise.fbm3d(X3 + 1400, Y3 * 0.36, Z3 - 900, s + 613, octaves=2, freq=1 / 128.0) - 0.5) * 14.0
+    warp_z = (noise.fbm3d(X3 - 700, Y3 * 0.36, Z3 + 1200, s + 614, octaves=2, freq=1 / 128.0) - 0.5) * 14.0
+    WX = X3 + warp_x
+    WZ = Z3 + warp_z
+
+    province = noise.fbm2d(X3[0] - 2600, Z3[0] + 3600, s + 618, octaves=3, freq=1 / 240.0)[None, :, :]
+    province = _smoothstep01((province - 0.22) / 0.34)
+    local_gate = noise.fbm3d(WX - 3100, Y3 * 0.42, WZ + 2200, s + 619, octaves=2, freq=1 / 92.0)
+    local_gate = _smoothstep01((local_gate - 0.28) / 0.34)
+    gate = np.maximum(province * (0.54 + 0.66 * local_gate), local_gate * 0.20)
+
+    cheese = noise.fbm3d(WX, Y3 * 0.92, WZ, s + 615, octaves=3, freq=1 / 58.0)
+    cheese2 = noise.fbm3d(WX - 900, Y3 * 0.74, WZ + 900, s + 616, octaves=2, freq=1 / 86.0)
+    # Cheese caves are intentionally secondary. The deep dark should read like
+    # the deep cavern pass above it with wider tunnels, not one giant flat hall.
+    cheese_cut = 0.718 - 0.024 * deep01 - 0.024 * gate
+    cheese_open = (cheese > cheese_cut) & (cheese2 > 0.532 - 0.024 * deep01)
+
+    # Same idea as the normal deep cavern pass: two intersecting 3D contour
+    # fields make organic paths, only wider than the overworld caves.
+    spag_a = noise.fbm3d(WX + 7800, Y3 * 1.06, WZ - 7800, s + 617, octaves=2, freq=1 / 43.0)
+    spag_b = noise.fbm3d(WX - 4200, Y3 * 0.98, WZ + 4100, s + 620, octaves=2, freq=1 / 50.0)
+    spag_w = (0.053 + 0.034 * deep01) * (0.78 + 0.88 * gate)
+    spaghetti_open = (np.abs(spag_a - 0.5) < spag_w) & (np.abs(spag_b - 0.5) < spag_w * 1.92)
+
+    noodle_a = noise.fbm3d(WX - 12000, Y3 * 1.28, WZ + 12000, s + 623, octaves=1, freq=1 / 27.0)
+    noodle_b = noise.fbm3d(WX + 5300, Y3 * 1.20, WZ - 5300, s + 624, octaves=1, freq=1 / 32.0)
+    noodle_w = (0.027 + 0.017 * deep01) * (0.82 + 0.72 * gate)
+    noodle_open = (np.abs(noodle_a - 0.5) < noodle_w) & (np.abs(noodle_b - 0.5) < noodle_w * 2.18)
+
+    # Very rare large rooms. The feature-cell cave graph below supplies most of
+    # the openness; this only makes occasional ancient-city-sized pockets.
+    room = noise.fbm3d(WX + 18000, Y3 * 0.48, WZ - 18000, s + 625, octaves=2, freq=1 / 122.0)
+    room_gate = noise.fbm2d(X3[0] + 9100, Z3[0] - 9100, s + 626, octaves=2, freq=1 / 340.0)[None, :, :]
+    room_center = 0.30 + 0.20 * noise.fbm2d(X3[0] - 11100, Z3[0] + 11100, s + 627, octaves=2, freq=1 / 300.0)[None, :, :]
+    vertical = np.exp(-((top01 - room_center) ** 2) / 0.018)
+    room_open = (room > 0.694 - 0.018 * deep01) & (room_gate > 0.620) & (vertical > 0.43)
+
+    lace_a = noise.fbm3d(WX + 27100, Y3 * 1.02, WZ - 27100, s + 629, octaves=2, freq=1 / 39.0)
+    lace_b = noise.fbm3d(WX - 21300, Y3 * 1.14, WZ + 21300, s + 630, octaves=2, freq=1 / 45.0)
+    lace_w = (0.031 + 0.021 * deep01) * (0.82 + 0.70 * local_gate)
+    lace_open = (np.abs(lace_a - 0.5) < lace_w) & (np.abs(lace_b - 0.5) < lace_w * 1.78)
+
+    web_a = noise.fbm3d(WX + 33000, Y3 * 1.04, WZ - 17000, s + 631, octaves=2, freq=1 / 34.0)
+    web_b = noise.fbm3d(WX - 19000, Y3 * 1.16, WZ + 29000, s + 632, octaves=2, freq=1 / 38.0)
+    web_c = noise.fbm3d(WX + 8000, Y3 * 0.90, WZ + 26000, s + 633, octaves=2, freq=1 / 54.0)
+    web_w = 0.034 + 0.021 * deep01
+    web_open = ((np.abs(web_a - 0.5) < web_w) & (np.abs(web_b - 0.5) < web_w * 1.72)) | \
+               ((np.abs(web_b - 0.5) < web_w * 0.82) & (np.abs(web_c - 0.5) < web_w * 1.52))
+
+    rescue_a = noise.fbm3d(WX - 41000, Y3 * 0.94, WZ + 15000, s + 634, octaves=2, freq=1 / 35.0)
+    rescue_b = noise.fbm3d(WX + 12500, Y3 * 1.06, WZ - 36500, s + 635, octaves=2, freq=1 / 41.0)
+    rescue_c = noise.fbm3d(WX - 28000, Y3 * 0.84, WZ - 12000, s + 636, octaves=2, freq=1 / 59.0)
+    rescue_w = 0.036 + 0.022 * deep01
+    rescue_open = (gate < 0.32) & (((np.abs(rescue_a - 0.5) < rescue_w) & (np.abs(rescue_b - 0.5) < rescue_w * 1.76)) | \
+                                  ((np.abs(rescue_b - 0.5) < rescue_w * 0.88) & (np.abs(rescue_c - 0.5) < rescue_w * 1.48)))
+
+    near_top = _smoothstep01((top01 - 0.84) / 0.14)
+    near_bedrock = _smoothstep01(rows / 5.0)
+    open_allowed = inside_b & (near_bedrock > 0.05)
+
+    air_mask = open_allowed & (((gate > 0.085) & (cheese_open | spaghetti_open | noodle_open | lace_open | room_open)) | web_open | rescue_open)
+
+    # Keep the entry rows closer to normal overworld cavern density so the layer
+    # transitions instead of immediately exploding into void. Existing overworld
+    # cave connections can still punch through via _connect_caves().
+    top_throttle = near_top > 0.0
+    if np.any(top_throttle):
+        top_noise = noise.fbm3d(WX + 2300, Y3 * 1.10, WZ - 2300, s + 628, octaves=2, freq=1 / 36.0)
+        air_mask &= (~top_throttle) | (top_noise > 0.13)
+
     sub[air_mask] = blocks.air
+    _carve_deep_dark_networks(cfg, blocks, sub, X3, Y3, Z3, inside_b)
+    _solidify_deep_dark_ribs(cfg, blocks, sub, X3, Y3, Z3, inside_b)
+    _roughen_deep_dark_floors(cfg, blocks, sub, X3, Y3, Z3, inside_b, rng)
 
     block_ids[band] = sub
+    _deep_dark_stalactites(cfg, blocks, block_ids, band, inside_b, rng)
+    _deep_dark_ores(cfg, blocks, block_ids, band, inside_b, rng)
 
     # Sculk crust on cavern floors + sparse shriekers/sensors/catalysts.
     _sculk_pass(cfg, blocks, block_ids, band, inside_b, rng)
+
+
+def _mix32(v):
+    v = int(v) & 0xFFFFFFFF
+    v ^= (v >> 16)
+    v = (v * 0x7FEB352D) & 0xFFFFFFFF
+    v ^= (v >> 15)
+    v = (v * 0x846CA68B) & 0xFFFFFFFF
+    v ^= (v >> 16)
+    return v & 0xFFFFFFFF
+
+
+def _hash2i(x, z, seed, salt):
+    return _mix32(int(x) * 374761393 + int(z) * 668265263 + int(seed) * 1442695041 + int(salt) * 2246822519)
+
+
+def _rand01(x, z, seed, salt):
+    return _hash2i(x, z, seed, salt) / 4294967296.0
+
+
+def _rand_range(x, z, seed, salt, lo, hi):
+    return lo + (hi - lo) * _rand01(x, z, seed, salt)
+
+
+def _iter_feature_cells(X, Z, spacing, reach):
+    min_x = int(np.floor(float(X.min())))
+    max_x = int(np.ceil(float(X.max())))
+    min_z = int(np.floor(float(Z.min())))
+    max_z = int(np.ceil(float(Z.max())))
+    cx0 = (min_x - reach) // spacing - 1
+    cx1 = (max_x + reach) // spacing + 1
+    cz0 = (min_z - reach) // spacing - 1
+    cz1 = (max_z + reach) // spacing + 1
+    for cell_z in range(cz0, cz1 + 1):
+        for cell_x in range(cx0, cx1 + 1):
+            yield cell_x, cell_z
+
+
+def _solidify_deep_dark_ribs(cfg, blocks, sub, X3, Y3, Z3, inside_b):
+    # Re-introduce sparse solid ribs and pillar curtains after cave carving. Keep
+    # this light: the deep dark should share the openness of the cavern layer,
+    # not turn into noisy sponge walls.
+    air = sub == blocks.air
+    if not air.any():
+        return
+
+    top01 = np.linspace(0.0, 1.0, sub.shape[0])[:, None, None]
+    mid_gate = _smoothstep01((top01 - 0.06) / 0.18) * (1.0 - _smoothstep01((top01 - 0.92) / 0.08))
+
+    rib_a = noise.fbm2d(X3[0] + 51000, Z3[0] - 22000, cfg.seed + 91201, octaves=3, freq=1 / 76.0)
+    rib_b = noise.fbm2d(X3[0] - 32000, Z3[0] + 47000, cfg.seed + 91202, octaves=3, freq=1 / 83.0)
+    rib_line = ((np.abs(rib_a - 0.5) < 0.038) & (rib_b > 0.36)) | \
+               ((np.abs(rib_b - 0.5) < 0.034) & (rib_a > 0.42))
+
+    pillar_field = noise.fbm2d(X3[0] + 18000, Z3[0] + 18000, cfg.seed + 91203, octaves=2, freq=1 / 31.0)
+    pillar_gate = noise.fbm2d(X3[0] - 27000, Z3[0] - 9000, cfg.seed + 91204, octaves=2, freq=1 / 118.0)
+    pillar = (pillar_field > 0.745) & (pillar_gate > 0.42)
+
+    rough = noise.fbm3d(X3 + 61000, Y3 * 0.80, Z3 - 61000, cfg.seed + 91205, octaves=2, freq=1 / 24.0)
+    fill = air & inside_b & (mid_gate > 0.16) & (((rib_line[None, :, :]) & (rough > 0.38)) |
+                                                 ((pillar[None, :, :]) & (rough > 0.42)))
+    sub[fill] = np.where(rough[fill] > 0.62, blocks.tuff, blocks.deepslate)
+
+
+def _roughen_deep_dark_floors(cfg, blocks, sub, X3, Y3, Z3, inside_b, rng):
+    # Shape floors like normal caverns: broad shelves and gentle mounds that are
+    # coherent across X/Z. Avoid the old per-block 3D noise floor, which made the
+    # deep dark look like random gravel chaos instead of carved cave terrain.
+    nb, h, w = sub.shape
+    air = sub == blocks.air
+    solid = sub != blocks.air
+    floor = np.zeros_like(air)
+    floor[:-1] = solid[:-1] & air[1:]
+    floor &= inside_b
+    if not floor.any():
+        return
+
+    X2 = X3[0]
+    Z2 = Z3[0]
+    broad2 = noise.fbm2d(X2 + 71000, Z2 - 71000, cfg.seed + 91301, octaves=3, freq=1 / 74.0)
+    shelf2 = noise.fbm2d(X2 - 52000, Z2 + 52000, cfg.seed + 91302, octaves=2, freq=1 / 118.0)
+    detail2 = noise.fbm2d(X2 + 18000, Z2 + 18000, cfg.seed + 91303, octaves=2, freq=1 / 42.0)
+    mound_float2 = _smoothstep01((broad2 - 0.34) / 0.42) * 2.7 + _smoothstep01((shelf2 - 0.56) / 0.28) * 1.9
+    mound_float2 += np.clip((detail2 - 0.60) / 0.30, 0.0, 1.0) * 0.55
+    mound_height2 = np.floor(mound_float2).astype(np.int16)
+
+    ys, zs, xs = np.nonzero(floor)
+    for i in range(ys.size):
+        y = int(ys[i])
+        z = int(zs[i])
+        x = int(xs[i])
+        height = int(mound_height2[z, x])
+        if height <= 0:
+            continue
+        bid = blocks.tuff if broad2[z, x] > 0.68 else blocks.deepslate
+        for k in range(1, min(height, 4) + 1):
+            yy = y + k
+            if yy >= nb or sub[yy, z, x] != blocks.air:
+                break
+            sub[yy, z, x] = bid
+            if k <= height - 1 and height >= 3:
+                for dz, dx in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                    z2 = z + dz
+                    x2 = x + dx
+                    if 0 <= z2 < h and 0 <= x2 < w and sub[yy, z2, x2] == blocks.air:
+                        if mound_height2[z2, x2] >= k + 1 and detail2[z2, x2] > 0.50:
+                            sub[yy, z2, x2] = bid
+
+
+def _carve_deep_dark_networks(cfg, blocks, sub, X3, Y3, Z3, inside_b):
+    # Deterministic feature-cell tunnels guarantee that every deep-dark region
+    # has real pathing density. Noise caves provide organic pockets; these
+    # segments provide the connected cave graph, matching how the normal cavern
+    # layer above has many routes instead of isolated pockets.
+    spacing = 46
+    reach = 184
+    y_min = float(Y3.min() + 5.0)
+    y_max = float(Y3.max() - 3.0)
+    if y_max <= y_min:
+        return
+
+    for cell_x, cell_z in _iter_feature_cells(X3[0], Z3[0], spacing, reach):
+        if _rand01(cell_x, cell_z, cfg.seed, 91001) > 0.95:
+            continue
+
+        ox = cell_x * spacing + _rand_range(cell_x, cell_z, cfg.seed, 91002, 8.0, spacing - 8.0)
+        oz = cell_z * spacing + _rand_range(cell_x, cell_z, cfg.seed, 91003, 8.0, spacing - 8.0)
+        oy = _rand_range(cell_x, cell_z, cfg.seed, 91004, y_min, y_max)
+        arms = 3 + int(_rand01(cell_x, cell_z, cfg.seed, 91005) * 4.0)
+        base_angle = _rand_range(cell_x, cell_z, cfg.seed, 91006, 0.0, np.pi * 2.0)
+        base_radius = _rand_range(cell_x, cell_z, cfg.seed, 91007, 5.40, 10.20)
+
+        _carve_deep_room(blocks, sub, X3, Y3, Z3, inside_b, ox, oy, oz,
+                         base_radius * 1.42, base_radius * 0.92, base_radius * 1.42)
+
+        ends = []
+        for arm in range(arms):
+            angle = base_angle + (np.pi * 2.0 * arm / max(1, arms)) + _rand_range(cell_x, cell_z, cfg.seed, 91020 + arm, -0.55, 0.55)
+            length = _rand_range(cell_x, cell_z, cfg.seed, 91030 + arm, 58.0, 136.0)
+            mid_len = length * _rand_range(cell_x, cell_z, cfg.seed, 91040 + arm, 0.38, 0.66)
+            ex = ox + np.cos(angle) * length
+            ez = oz + np.sin(angle) * length
+            ey = np.clip(oy + _rand_range(cell_x, cell_z, cfg.seed, 91050 + arm, -13.0, 13.0), y_min, y_max)
+            mx = ox + np.cos(angle + _rand_range(cell_x, cell_z, cfg.seed, 91060 + arm, -0.45, 0.45)) * mid_len
+            mz = oz + np.sin(angle + _rand_range(cell_x, cell_z, cfg.seed, 91070 + arm, -0.45, 0.45)) * mid_len
+            my = np.clip((oy + ey) * 0.5 + _rand_range(cell_x, cell_z, cfg.seed, 91080 + arm, -5.0, 5.0), y_min, y_max)
+            r = base_radius * _rand_range(cell_x, cell_z, cfg.seed, 91090 + arm, 0.78, 1.46)
+            _carve_deep_segment(blocks, sub, X3, Y3, Z3, inside_b, ox, oy, oz, mx, my, mz, r)
+            _carve_deep_segment(blocks, sub, X3, Y3, Z3, inside_b, mx, my, mz, ex, ey, ez, r * 0.88)
+            if _rand01(cell_x, cell_z, cfg.seed, 91100 + arm) < 0.58:
+                _carve_deep_room(blocks, sub, X3, Y3, Z3, inside_b, mx, my, mz, r * 1.38, r * 0.82, r * 1.38)
+            ends.append((ex, ey, ez))
+
+        if len(ends) >= 3:
+            for link in range(2):
+                a = ends[int(_rand01(cell_x, cell_z, cfg.seed, 91120 + link) * len(ends))]
+                b = ends[int(_rand01(cell_x, cell_z, cfg.seed, 91130 + link) * len(ends))]
+                if a == b:
+                    continue
+                r = base_radius * _rand_range(cell_x, cell_z, cfg.seed, 91140 + link, 0.42, 0.68)
+                _carve_deep_segment(blocks, sub, X3, Y3, Z3, inside_b, a[0], a[1], a[2], b[0], b[1], b[2], r)
+
+
+def _carve_deep_room(blocks, sub, X3, Y3, Z3, inside_b, cx, cy, cz, rx, ry, rz):
+    d = ((X3 - cx) / max(0.1, rx)) ** 2 + ((Y3 - cy) / max(0.1, ry)) ** 2 + ((Z3 - cz) / max(0.1, rz)) ** 2
+    solid = (sub != blocks.bedrock) & (sub != blocks.lava)
+    sub[(d <= 1.0) & inside_b & solid] = blocks.air
+
+
+def _carve_deep_segment(blocks, sub, X3, Y3, Z3, inside_b, ax, ay, az, bx, by, bz, radius):
+    vx = bx - ax
+    vy = by - ay
+    vz = bz - az
+    length2 = vx * vx + vy * vy + vz * vz
+    if length2 <= 0.001:
+        return
+    t = ((X3 - ax) * vx + (Y3 - ay) * vy + (Z3 - az) * vz) / length2
+    t = np.clip(t, 0.0, 1.0)
+    px = ax + vx * t
+    py = ay + vy * t
+    pz = az + vz * t
+    taper = np.sin(np.pi * t)
+    r = radius * (0.45 + 0.55 * taper)
+    d = (X3 - px) ** 2 + ((Y3 - py) * 1.04) ** 2 + (Z3 - pz) ** 2
+    solid = (sub != blocks.bedrock) & (sub != blocks.lava)
+    sub[(d <= r * r) & inside_b & solid] = blocks.air
+
+
+def _sample_ore_y(rng, lo, hi, bias):
+    if hi <= lo:
+        return int(lo)
+    t = rng.random()
+    if bias == "low":
+        t = t * t
+    elif bias == "high":
+        t = 1.0 - (1.0 - t) * (1.0 - t)
+    elif bias == "mid":
+        t = (rng.random() + rng.random()) * 0.5
+    return int(round(lo + (hi - lo) * t))
+
+
+def _place_ore_blob(sub, x, y, z, size, oid, rng, replaceable):
+    nb, h, w = sub.shape
+    count = max(1, int(size))
+    cx = float(x)
+    cy = float(y)
+    cz = float(z)
+    for _ in range(count):
+        ix = int(round(cx))
+        iy = int(round(cy))
+        iz = int(round(cz))
+        radius = 1 if rng.random() < 0.72 else 2
+        for dz in range(-radius, radius + 1):
+            zz = iz + dz
+            if zz < 0 or zz >= h:
+                continue
+            for dx in range(-radius, radius + 1):
+                xx = ix + dx
+                if xx < 0 or xx >= w:
+                    continue
+                for dy in range(-radius, radius + 1):
+                    yy = iy + dy
+                    if yy < 0 or yy >= nb:
+                        continue
+                    if dx * dx + dy * dy + dz * dz > radius * radius + 0.35:
+                        continue
+                    if sub[yy, zz, xx] in replaceable and rng.random() < 0.72:
+                        sub[yy, zz, xx] = oid
+        cx += rng.normal(0.0, 0.78)
+        cy += rng.normal(0.0, 0.54)
+        cz += rng.normal(0.0, 0.78)
+
+
+def _deep_dark_ores(cfg, blocks, block_ids, band, inside_b, rng):
+    sub = block_ids[band]
+    nb = sub.shape[0]
+    if nb <= 0 or not getattr(cfg, "ores", None):
+        return
+
+    # The overworld ore pass happens before the deep dark rewrite and only
+    # targets the normal cavern stone. Re-run the same ore config inside the
+    # deep-dark rock so this lower cave layer is not barren. Use a strong count
+    # multiplier because the visible cave-wall density should match the cavern
+    # layer above even though this vertical band is shorter.
+    replaceable = {blocks.deepslate, blocks.tuff, blocks.cobbled_deepslate, blocks.stone}
+    rock = ((sub == blocks.deepslate) | (sub == blocks.tuff) |
+            (sub == blocks.cobbled_deepslate) | (sub == blocks.stone)) & inside_b
+    if not rock.any():
+        return
+
+    band_lo = 0
+    band_hi = nb - 1
+    world_lo = band.start + MIN_Y
+    world_hi = band.stop - 1 + MIN_Y
+
+    for ore in cfg.ores:
+        oid = blocks.ore(ore.name)
+        y_lo_world = max(world_lo, int(getattr(ore, "y_min", world_lo)))
+        y_hi_world = min(world_hi, int(getattr(ore, "y_max", world_hi)))
+
+        # If the vanilla-ish configured range lives above this band, remap it
+        # into the deep dark instead of skipping it. High-biased ores sit in the
+        # upper half; low-biased ores sit lower; mid/uniform ores use the full
+        # band.
+        if y_hi_world < y_lo_world:
+            bias = getattr(ore, "bias", "uniform")
+            if bias == "high":
+                y_lo_world = world_lo + int((world_hi - world_lo) * 0.46)
+                y_hi_world = world_hi
+            elif bias == "low":
+                y_lo_world = world_lo
+                y_hi_world = world_lo + int((world_hi - world_lo) * 0.58)
+            else:
+                y_lo_world = world_lo
+                y_hi_world = world_hi
+
+        y_lo = max(band_lo, y_lo_world - world_lo)
+        y_hi = min(band_hi, y_hi_world - world_lo)
+        if y_hi < y_lo:
+            continue
+
+        veins = int(rng.poisson(max(0.0, float(getattr(ore, "veins_per_chunk", 0.0))) * 0.90))
+        for _ in range(veins):
+            for attempt in range(12):
+                x = int(rng.integers(0, 16))
+                z = int(rng.integers(0, 16))
+                if inside_b[0, z, x]:
+                    break
+            else:
+                continue
+            y = _sample_ore_y(rng, y_lo, y_hi, getattr(ore, "bias", "uniform"))
+            _place_ore_blob(sub, x, y, z, getattr(ore, "vein_size", 5), oid, rng, replaceable)
+
+    block_ids[band] = sub
+
+def _deep_dark_stalactites(cfg, blocks, block_ids, band, inside_b, rng):
+    sub = block_ids[band]
+    nb = sub.shape[0]
+    air = sub == blocks.air
+    solid = sub != blocks.air
+    roof = np.zeros_like(air)
+    roof[1:] = solid[1:] & air[:-1]
+    roof &= inside_b
+
+    ys, zs, xs = np.nonzero(roof)
+    for i in range(ys.size):
+        yy, zz, xx = int(ys[i]), int(zs[i]), int(xs[i])
+        # Sparse but chunky. Hash through rng/noise instead of placing every roof
+        # cell, otherwise the deep dark becomes a curtain.
+        if rng.random() > 0.035:
+            continue
+        length = int(rng.integers(2, 9))
+        radius = 1 if length >= 5 and rng.random() < 0.40 else 0
+        bid = blocks.tuff if rng.random() < 0.22 else blocks.deepslate
+        for k in range(1, length + 1):
+            y = yy - k
+            if y < 0 or sub[y, zz, xx] != blocks.air:
+                break
+            sub[y, zz, xx] = bid
+            if radius and k <= length // 2:
+                for dz, dx in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                    z2, x2 = zz + dz, xx + dx
+                    if 0 <= z2 < 16 and 0 <= x2 < 16 and sub[y, z2, x2] == blocks.air and rng.random() < 0.42:
+                        sub[y, z2, x2] = bid
+    block_ids[band] = sub
 
 
 def _sculk_pass(cfg, blocks, block_ids, band, inside_b, rng):
