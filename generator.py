@@ -27,6 +27,8 @@ from typing import List, Dict, Callable, Optional
 
 import nbt
 import noise
+import underworld
+import structures
 from region import RegionWriter, build_chunk
 
 # Fixed vertical layout (standard overworld dimension range).
@@ -34,6 +36,10 @@ MIN_Y = -64
 WORLD_HEIGHT = 384          # -64 .. 319
 MIN_SECTION = MIN_Y // 16   # -4
 N_SECTIONS = WORLD_HEIGHT // 16  # 24
+
+NETHER_BOX_SIZE = 1000
+NETHER_BOX_GAP = 500
+NETHER_BOX_CEILING_Y = 127
 
 
 _UINT32 = 0xFFFFFFFF
@@ -117,6 +123,84 @@ class Blocks:
         self.granite = g(_bkey("minecraft:granite"))
         self.andesite = g(_bkey("minecraft:andesite"))
 
+        # Deep dark
+        self.deepslate = g(_bkey("minecraft:deepslate", {"axis": "y"}))
+        self.tuff = g(_bkey("minecraft:tuff"))
+        self.cobbled_deepslate = g(_bkey("minecraft:cobbled_deepslate"))
+        self.sculk = g(_bkey("minecraft:sculk"))
+        self.sculk_vein = g(_bkey("minecraft:sculk_vein",
+                                  {"up": "true", "down": "false", "north": "false",
+                                   "south": "false", "east": "false", "west": "false"}))
+        self.sculk_sensor = g(_bkey("minecraft:sculk_sensor"))
+        self.sculk_shrieker = g(_bkey("minecraft:sculk_shrieker", {"can_summon": "true"}))
+        self.sculk_catalyst = g(_bkey("minecraft:sculk_catalyst"))
+        self.reinforced_deepslate = g(_bkey("minecraft:reinforced_deepslate"))
+        self.deepslate_bricks = g(_bkey("minecraft:deepslate_bricks"))
+        self.deepslate_tiles = g(_bkey("minecraft:deepslate_tiles"))
+        self.cracked_deepslate_bricks = g(_bkey("minecraft:cracked_deepslate_bricks"))
+        self.polished_deepslate = g(_bkey("minecraft:polished_deepslate"))
+
+        # Nether
+        self.netherrack = g(_bkey("minecraft:netherrack"))
+        self.soul_sand = g(_bkey("minecraft:soul_sand"))
+        self.soul_soil = g(_bkey("minecraft:soul_soil"))
+        self.magma = g(_bkey("minecraft:magma_block"))
+        self.glowstone = g(_bkey("minecraft:glowstone"))
+        self.basalt = g(_bkey("minecraft:basalt", {"axis": "y"}))
+        self.blackstone = g(_bkey("minecraft:blackstone"))
+        self.gilded_blackstone = g(_bkey("minecraft:gilded_blackstone"))
+        self.crimson_nylium = g(_bkey("minecraft:crimson_nylium"))
+        self.warped_nylium = g(_bkey("minecraft:warped_nylium"))
+        self.nether_wart_block = g(_bkey("minecraft:nether_wart_block"))
+        self.warped_wart_block = g(_bkey("minecraft:warped_wart_block"))
+        self.crimson_stem = g(_bkey("minecraft:crimson_stem", {"axis": "y"}))
+        self.warped_stem = g(_bkey("minecraft:warped_stem", {"axis": "y"}))
+        self.shroomlight = g(_bkey("minecraft:shroomlight"))
+        self.nether_bricks = g(_bkey("minecraft:nether_bricks"))
+        self.nether_quartz_ore = g(_bkey("minecraft:nether_quartz_ore"))
+        self.nether_gold_ore = g(_bkey("minecraft:nether_gold_ore"))
+        self.ancient_debris = g(_bkey("minecraft:ancient_debris"))
+        self.polished_blackstone_bricks = g(_bkey("minecraft:polished_blackstone_bricks"))
+
+        # Structure blocks
+        self.cobblestone = g(_bkey("minecraft:cobblestone"))
+        self.stone_bricks = g(_bkey("minecraft:stone_bricks"))
+        self.mossy_stone_bricks = g(_bkey("minecraft:mossy_stone_bricks"))
+        self.cracked_stone_bricks = g(_bkey("minecraft:cracked_stone_bricks"))
+        self.chiseled_stone_bricks = g(_bkey("minecraft:chiseled_stone_bricks"))
+        self.stone_brick_wall = g(_bkey("minecraft:stone_bricks"))
+        self.oak_planks = g(_bkey("minecraft:oak_planks"))
+        self.spruce_planks = g(_bkey("minecraft:spruce_planks"))
+        self.cobblestone_stairs = g(_bkey("minecraft:cobblestone"))
+        self.glass = g(_bkey("minecraft:glass"))
+        self.bookshelf = g(_bkey("minecraft:bookshelf"))
+        self.torch = g(_bkey("minecraft:torch"))
+        self.lantern = g(_bkey("minecraft:lantern", {"hanging": "false"}))
+        self.soul_lantern = g(_bkey("minecraft:soul_lantern", {"hanging": "false"}))
+        self.cobweb = g(_bkey("minecraft:cobweb"))
+        self.chiseled_sandstone = g(_bkey("minecraft:chiseled_sandstone"))
+        self.cut_sandstone = g(_bkey("minecraft:cut_sandstone"))
+        self.smooth_sandstone = g(_bkey("minecraft:smooth_sandstone"))
+        self.blue_terracotta = g(_bkey("minecraft:blue_terracotta"))
+        self.polished_blackstone = g(_bkey("minecraft:polished_blackstone"))
+        self.chiseled_polished_blackstone = g(_bkey("minecraft:chiseled_polished_blackstone"))
+        self.gold_block = g(_bkey("minecraft:gold_block"))
+        self.nether_wart_plant = g(_bkey("minecraft:nether_wart", {"age": "3"}))
+        self.spawner = g(_bkey("minecraft:spawner"))
+        self.iron_bars = g(_bkey("minecraft:iron_bars",
+                                 {"north": "false", "south": "false", "east": "false",
+                                  "west": "false", "waterlogged": "false"}))
+        self.nether_brick_fence = g(_bkey("minecraft:nether_brick_fence",
+                                          {"north": "false", "south": "false",
+                                           "east": "false", "west": "false",
+                                           "waterlogged": "false"}))
+        self.chest_face = {f: g(_bkey("minecraft:chest",
+                                      {"facing": f, "type": "single", "waterlogged": "false"}))
+                           for f in ("north", "south", "east", "west")}
+        self.portal_frame = {f: g(_bkey("minecraft:end_portal_frame",
+                                         {"eye": "false", "facing": f}))
+                             for f in ("north", "south", "east", "west")}
+
         # plants -- short grass was renamed grass -> short_grass in 1.20.3 (3698)
         sg = "minecraft:short_grass" if data_version >= 3698 else "minecraft:grass"
         self.short_grass = g(_bkey(sg))
@@ -182,6 +266,11 @@ BIOME_COLORS = {
     "minecraft:snowy_taiga": (198, 216, 208),
     "minecraft:snowy_slopes": (223, 231, 240),
     "minecraft:river": (72, 118, 178),
+    "minecraft:nether_wastes": (111, 54, 52),
+    "minecraft:crimson_forest": (150, 46, 63),
+    "minecraft:warped_forest": (55, 132, 126),
+    "minecraft:soul_sand_valley": (94, 76, 74),
+    "minecraft:basalt_deltas": (67, 67, 73),
 }
 
 
@@ -201,6 +290,11 @@ MAP_BASE_COLORS = {
     "minecraft:snowy_taiga": (216, 238, 226),
     "minecraft:snowy_slopes": (255, 255, 255),
     "minecraft:river": (64, 64, 255),
+    "minecraft:nether_wastes": (112, 54, 55),
+    "minecraft:crimson_forest": (153, 48, 64),
+    "minecraft:warped_forest": (40, 124, 118),
+    "minecraft:soul_sand_valley": (92, 77, 75),
+    "minecraft:basalt_deltas": (67, 67, 73),
 }
 MAP_SHADE = (0.71, 0.86, 1.0, 1.15)
 
@@ -222,8 +316,8 @@ class OreCfg:
 def _default_ores():
     # Grounded in 1.20 vanilla y-levels, adapted to this shallow world.
     return [
-        OreCfg("coal_ore", 5, 120, 11.0, 12, "high"),
-        OreCfg("iron_ore", -19, 80, 9.0, 8, "mid"),
+        OreCfg("coal_ore", -64, 319, 11.0, 12, "high"),
+        OreCfg("iron_ore", -64, 319, 9.0, 8, "mid"),
         OreCfg("copper_ore", 0, 96, 6.0, 8, "mid"),
         OreCfg("gold_ore", -19, 32, 3.0, 6, "low"),
         OreCfg("redstone_ore", -19, 15, 7.0, 7, "low"),
@@ -240,14 +334,14 @@ class WorldConfig:
     data_version: int = 3465          # 1.20.1
     version_name: str = "1.20.1"
 
-    floor_y: int = -20                # bedrock floor; void below
-    water_level: int = 62
-    base_height: int = 71
-    hill_amp: float = 12.0
-    mountain_amp: float = 70.0
-    mountain_amount: float = 0.5       # 0..1, higher => more/higher mountains
-    extreme_mountain_amount: float = 0.35  # sparse local mountain ranges
-    snowline_y: int = 95
+    floor_y: int = -20                # overworld bottom; underworld/void below
+    water_level: int = 118
+    base_height: int = 128            # raised so the underworld layers get room below
+    hill_amp: float = 11.0
+    mountain_amp: float = 74.0
+    mountain_amount: float = 0.30      # 0..1, higher => more/higher mountains
+    extreme_mountain_amount: float = 0.20  # sparse local mountain ranges
+    snowline_y: int = 246
 
     caves: bool = True
     cave_intensity: float = 1.0
@@ -258,6 +352,7 @@ class WorldConfig:
     river_amount: float = 0.4          # 0..1
     lakes: bool = True
     lake_amount: float = 0.4           # 0..1
+    surface_lava_pools: bool = True    # rare small surface lava pools
 
     # Internal, auto-tuned per generated world so one seed does not become
     # 70% forest/plains or 50% snow. These are filled by _tune_biomes().
@@ -281,6 +376,16 @@ class WorldConfig:
     game_type: int = 0                # 0 survival, 1 creative
     allow_commands: bool = True
 
+    # Optional extra spaces. Deep dark is vertical under the overworld floor.
+    # Nether is no longer a vertical layer; it is generated as its own sealed
+    # 1000x1000 box to the right of the overworld.
+    deep_dark: bool = False           # deepslate/tuff/sculk below the caverns
+    deep_dark_height: int = 0         # legacy field; deep dark now fills to MIN_Y
+    nether: bool = False              # separate netherrack/lava biome box
+    nether_height: int = 0            # legacy field; kept for old callers
+    structures: bool = False          # scatter recognizable structures
+    structure_plan: Optional[list] = None   # filled by generate_world before workers run
+
     ores: List[OreCfg] = field(default_factory=_default_ores)
 
 
@@ -299,8 +404,15 @@ def _prepare_palettes(cfg: WorldConfig):
         blocks.leaves(kind)
 
     # Ores are user-configurable, so register the active set in config order.
+    # Deep-dark ores are placed after the deep-dark material palette pass, using
+    # deepslate ore variants. Register those up-front too so multiprocessing
+    # workers never create block IDs after their chunk palette snapshot has been
+    # taken. If a custom ore is not an *_ore block, _deep_dark_ore_name() returns
+    # it unchanged and Registry.get() deduplicates it normally.
     for ore in cfg.ores:
         blocks.ore(ore.name)
+        if cfg.deep_dark:
+            blocks.ore(_deep_dark_ore_name(ore.name))
 
     biome_reg = Registry()
     for biome in BIOME_COLORS:
@@ -332,6 +444,90 @@ def _resolve_worker_count(requested, total_regions, total_chunks, job_count=None
     return max(1, min(requested, job_count))
 
 
+def overworld_bounds(cfg):
+    xmin = -(cfg.size // 2)
+    xmax = xmin + cfg.size - 1
+    return xmin, xmax, xmin, xmax
+
+
+def nether_bounds(cfg):
+    oxmin, oxmax, _, _ = overworld_bounds(cfg)
+    nxmin = oxmax + 1 + NETHER_BOX_GAP
+    nxmax = nxmin + NETHER_BOX_SIZE - 1
+    nzmin = -(NETHER_BOX_SIZE // 2)
+    nzmax = nzmin + NETHER_BOX_SIZE - 1
+    return nxmin, nxmax, nzmin, nzmax
+
+
+def generation_areas(cfg):
+    areas = [("overworld",) + overworld_bounds(cfg)]
+    if cfg.nether:
+        areas.append(("nether",) + nether_bounds(cfg))
+    return areas
+
+
+def generation_bounds(cfg):
+    areas = generation_areas(cfg)
+    xmins = [a[1] for a in areas]
+    xmaxs = [a[2] for a in areas]
+    zmins = [a[3] for a in areas]
+    zmaxs = [a[4] for a in areas]
+    return min(xmins), max(xmaxs), min(zmins), max(zmaxs)
+
+
+def _chunk_bounds_for_area(area):
+    _, xmin, xmax, zmin, zmax = area
+    return xmin >> 4, xmax >> 4, zmin >> 4, zmax >> 4
+
+
+def _chunk_areas(cfg):
+    return [_chunk_bounds_for_area(area) for area in generation_areas(cfg)]
+
+
+def _chunk_in_any_area(cx, cz, chunk_areas):
+    for cxmin, cxmax, czmin, czmax in chunk_areas:
+        if cxmin <= cx <= cxmax and czmin <= cz <= czmax:
+            return True
+    return False
+
+
+def _generation_chunks(cfg):
+    seen = set()
+    for cxmin, cxmax, czmin, czmax in _chunk_areas(cfg):
+        for cz in range(czmin, czmax + 1):
+            for cx in range(cxmin, cxmax + 1):
+                key = (cx, cz)
+                if key not in seen:
+                    seen.add(key)
+                    yield key
+
+
+def _region_jobs_for_areas(cfg):
+    chunk_areas = _chunk_areas(cfg)
+    region_ranges = set()
+    for cxmin, cxmax, czmin, czmax in chunk_areas:
+        for rz in range(czmin >> 5, (czmax >> 5) + 1):
+            for rx in range(cxmin >> 5, (cxmax >> 5) + 1):
+                region_ranges.add((rx, rz))
+
+    for rx, rz in sorted(region_ranges, key=lambda r: (r[1], r[0])):
+        rcxmin = rx << 5
+        rcxmax = rcxmin + 31
+        rczmin = rz << 5
+        rczmax = rczmin + 31
+        yield rx, rz, rcxmin, rcxmax, rczmin, rczmax
+
+
+def _tile_jobs_for_areas(cfg, tile_chunks=4):
+    chunk_areas = _chunk_areas(cfg)
+    for cxmin, cxmax, czmin, czmax in chunk_areas:
+        for jczmin in range(czmin, czmax + 1, tile_chunks):
+            jczmax = min(czmax, jczmin + tile_chunks - 1)
+            for jcxmin in range(cxmin, cxmax + 1, tile_chunks):
+                jcxmax = min(cxmax, jcxmin + tile_chunks - 1)
+                yield jcxmin, jcxmax, jczmin, jczmax
+
+
 def _region_jobs(cxmin, cxmax, czmin, czmax):
     rxmin, rxmax = cxmin >> 5, cxmax >> 5
     rzmin, rzmax = czmin >> 5, czmax >> 5
@@ -353,16 +549,17 @@ def _tile_jobs(cxmin, cxmax, czmin, czmax, tile_chunks=4):
             yield jcxmin, jcxmax, jczmin, jczmax
 
 
-def _preview_patch_rect(cfg, xmin, xmax, pscale, preview_size, cxmin, cxmax, czmin, czmax):
-    wx0 = max(xmin, cxmin * 16)
-    wx1 = min(xmax, cxmax * 16 + 15)
-    wz0 = max(xmin, czmin * 16)
-    wz1 = min(xmax, czmax * 16 + 15)
+def _preview_patch_rect(preview_xmin, preview_zmin, preview_w, preview_h, pscale,
+                        cxmin, cxmax, czmin, czmax):
+    wx0 = max(preview_xmin, cxmin * 16)
+    wx1 = min(preview_xmin + preview_w - 1, cxmax * 16 + 15)
+    wz0 = max(preview_zmin, czmin * 16)
+    wz1 = min(preview_zmin + preview_h - 1, czmax * 16 + 15)
 
-    px0 = max(0, min(preview_size - 1, (wx0 - xmin) // pscale))
-    px1 = max(0, min(preview_size - 1, (wx1 - xmin) // pscale))
-    pz0 = max(0, min(preview_size - 1, (wz0 - xmin) // pscale))
-    pz1 = max(0, min(preview_size - 1, (wz1 - xmin) // pscale))
+    px0 = max(0, min((preview_w + pscale - 1) // pscale - 1, (wx0 - preview_xmin) // pscale))
+    px1 = max(0, min((preview_w + pscale - 1) // pscale - 1, (wx1 - preview_xmin) // pscale))
+    pz0 = max(0, min((preview_h + pscale - 1) // pscale - 1, (wz0 - preview_zmin) // pscale))
+    pz1 = max(0, min((preview_h + pscale - 1) // pscale - 1, (wz1 - preview_zmin) // pscale))
 
     return px0, pz0, px1 - px0 + 1, pz1 - pz0 + 1
 
@@ -380,7 +577,11 @@ def _smoothstep01(t):
 
 
 def _temperature_height(cfg, Hf):
-    return np.clip((Hf - cfg.water_level) / 360.0, 0.0, 0.26)
+    # Temperature falloff follows the raised terrain frame. Since the generator
+    # now shifts the land/water/snow defaults upward together, keep altitude
+    # cooling soft enough that hot biomes cannot sit directly against snow just
+    # because one smoothed mountain shoulder crossed a height threshold.
+    return np.clip((Hf - cfg.water_level) / 640.0, 0.0, 0.16)
 
 
 def _base_climate_fields(cfg, X, Z, Hf):
@@ -414,15 +615,15 @@ def _base_climate_fields(cfg, X, Z, Hf):
     wave_temp = (np.sin(rx / size_scale * np.pi * 2.15 + phase_a) * 0.28 +
                  np.sin((rx * 0.55 + rz * 0.78) / size_scale * np.pi * 1.72 + phase_b) * 0.18)
     tw = noise.fbm2d(CX + 1000, CZ - 1000, s + 3, octaves=5, freq=1 / (size_scale * 0.92))
-    temp_detail = (noise.fbm2d(CX + 333, CZ - 777, s + 31, octaves=3, freq=1 / 210.0) - 0.5) * 0.15
+    temp_detail = (noise.fbm2d(CX + 333, CZ - 777, s + 31, octaves=3, freq=1 / 260.0) - 0.5) * 0.085
     edge_wobble = (noise.fbm2d(X + 7077, Z - 1212, s + 74, octaves=3, freq=1 / 135.0) - 0.5)
-    temp = 0.5 + wave_temp + (tw - 0.5) * 0.78 + temp_detail + edge_wobble * 0.055
+    temp = 0.5 + wave_temp + (tw - 0.5) * 0.70 + temp_detail + edge_wobble * 0.025
     temp -= _temperature_height(cfg, Hf)
 
     mw = noise.fbm2d(CX - 2000, CZ + 2000, s + 4, octaves=5, freq=1 / (size_scale * 0.82))
     hum_wave = (np.sin((rz * 0.95 - rx * 0.28) / size_scale * np.pi * 2.05 + phase_b * 0.7) * 0.16)
-    hum_detail = (noise.fbm2d(CX - 444, CZ + 666, s + 41, octaves=3, freq=1 / 195.0) - 0.5) * 0.16
-    hum = 0.5 + (mw - 0.5) * 1.10 + hum_wave + hum_detail - edge_wobble * 0.045
+    hum_detail = (noise.fbm2d(CX - 444, CZ + 666, s + 41, octaves=3, freq=1 / 245.0) - 0.5) * 0.105
+    hum = 0.5 + (mw - 0.5) * 0.96 + hum_wave + hum_detail - edge_wobble * 0.026
 
     selector = noise.fbm2d(CX + 8811, CZ - 4417, s + 73, octaves=3, freq=1 / 255.0)
     return np.clip(temp, 0.0, 1.0), np.clip(hum, 0.0, 1.0), selector, edge_wobble
@@ -442,8 +643,8 @@ def _badlands_strength(cfg, X, Z, temp_band, hum_band):
 
 
 def _classify_biomes(cfg, X, Z, Hf, mnt, temp, hum, selector, edge_wobble):
-    temp_band = np.clip(temp + edge_wobble * 0.045, 0.0, 1.0)
-    hum_band = np.clip(hum + (noise.fbm2d(X - 818, Z + 181, cfg.seed + 75, octaves=2, freq=1 / 145.0) - 0.5) * 0.065, 0.0, 1.0)
+    temp_band = np.clip(temp + edge_wobble * 0.018, 0.0, 1.0)
+    hum_band = np.clip(hum + (noise.fbm2d(X - 818, Z + 181, cfg.seed + 75, octaves=2, freq=1 / 190.0) - 0.5) * 0.040, 0.0, 1.0)
     forest_style = noise.fbm2d(X + 9191, Z - 3939, cfg.seed + 76, octaves=3, freq=1 / 240.0)
     badlands_strength = _badlands_strength(cfg, X, Z, temp_band, hum_band)
 
@@ -476,97 +677,281 @@ def _classify_biomes(cfg, X, Z, Hf, mnt, temp, hum, selector, edge_wobble):
     # Warm land: hot/dry splits into desert or mesa/badlands, hot/wet becomes
     # jungle, and the middle remains plains/sparse forest.
     biome[warm] = "minecraft:plains"
-    dry_hot = warm & (hum_band < cfg.biome_desert_hum_cut)
+    dry_hot = warm & (temp_band >= cfg.biome_warm_cut + 0.020) & (hum_band < cfg.biome_desert_hum_cut)
     biome[dry_hot] = "minecraft:desert"
     mesa = dry_hot & (badlands_strength > 0.36)
     biome[mesa] = "minecraft:badlands"
     biome[warm & (hum_band >= max(cfg.biome_forest_hum_cut, 0.58)) & (selector > 0.62)] = "minecraft:forest"
     biome[warm & (hum_band >= cfg.biome_jungle_hum_cut)] = "minecraft:jungle"
 
+    # Keep temperature transitions vanilla-feeling. A desert/badlands cell is
+    # only allowed when it is inside a warm province, not on the blurred edge of
+    # a cold/snow province. This prevents hard desert-snow contact while keeping
+    # elevation completely independent from biome paint.
+    if biome.ndim == 2 and biome.shape[0] >= 3 and biome.shape[1] >= 3:
+        cold_buffer = _soft_mask((temp_band < cfg.biome_cold_cut + 0.080).astype(np.float64), passes=7)
+        snow_buffer = _soft_mask((temp_band < cfg.biome_frozen_cut + 0.070).astype(np.float64), passes=8)
+        arid_edge = ((biome == "minecraft:desert") | (biome == "minecraft:badlands")) & \
+                    ((cold_buffer > 0.018) | (snow_buffer > 0.004) | (temp_band < cfg.biome_warm_cut + 0.105))
+        biome[arid_edge & (hum_band >= cfg.biome_forest_hum_cut)] = "minecraft:forest"
+        biome[arid_edge & (hum_band < cfg.biome_forest_hum_cut)] = "minecraft:plains"
+        badlands_strength = np.where(arid_edge, 0.0, badlands_strength)
+
     is_arid = (biome == "minecraft:desert") | (biome == "minecraft:badlands")
-    high = mnt > 0.55
-    snowy_peak = high & ((Hf >= cfg.snowline_y + 15) | (temp < cfg.biome_cold_cut - 0.08)) & ~is_arid
+    high = mnt > 0.72
+    snowy_peak = high & ((Hf >= cfg.snowline_y + 8) | ((Hf >= cfg.snowline_y - 4) & (temp < cfg.biome_cold_cut - 0.10))) & ~is_arid
     biome[snowy_peak] = "minecraft:snowy_slopes"
+
+    # Final temperature safety pass. Any hot/arid patch close enough to snowy
+    # terrain becomes a neutral transition biome, matching vanilla's climate
+    # bands instead of letting desert touch snow directly on the preview map.
+    if biome.ndim == 2 and biome.shape[0] >= 3 and biome.shape[1] >= 3:
+        snow_near = _soft_mask(((biome == "minecraft:snowy_plains") |
+                                (biome == "minecraft:snowy_taiga") |
+                                (biome == "minecraft:snowy_slopes")).astype(np.float64), passes=7)
+        arid_near_snow = ((biome == "minecraft:desert") | (biome == "minecraft:badlands")) & (snow_near > 0.004)
+        biome[arid_near_snow & (hum_band >= cfg.biome_forest_hum_cut)] = "minecraft:forest"
+        biome[arid_near_snow & (hum_band < cfg.biome_forest_hum_cut)] = "minecraft:plains"
+        badlands_strength = np.where(arid_near_snow, 0.0, badlands_strength)
     return biome, temp_band, hum_band, badlands_strength
 
 def _build_river_nodes(cfg, cell_x, cell_z, spacing):
-    ox = cell_x * spacing + _rand_range(cell_x, cell_z, cfg.seed, 5102, 32.0, spacing - 32.0)
-    oz = cell_z * spacing + _rand_range(cell_x, cell_z, cfg.seed, 5103, 32.0, spacing - 32.0)
+    # Finite, local river fragments. The old contour-noise river could run from
+    # one side of the 1k box to the other and then every local-water tweak had to
+    # fight a huge feature. These nodes make each river body its own short,
+    # level aquifer-style feature with a flat water plane.
+    margin = max(18.0, spacing * 0.12)
+    ox = cell_x * spacing + _rand_range(cell_x, cell_z, cfg.seed, 5102, margin, spacing - margin)
+    oz = cell_z * spacing + _rand_range(cell_x, cell_z, cfg.seed, 5103, margin, spacing - margin)
     angle = _rand_range(cell_x, cell_z, cfg.seed, 5104, 0.0, np.pi * 2.0)
-    bias = _rand_range(cell_x, cell_z, cfg.seed, 5105, -0.17, 0.17)
-    segs = 6 + int(_rand01(cell_x, cell_z, cfg.seed, 5106) * 7.0)
+    bias = _rand_range(cell_x, cell_z, cfg.seed, 5105, -0.105, 0.105)
+    segs = 2 + int(_rand01(cell_x, cell_z, cfg.seed, 5106) * 3.0)
     nodes = [(ox, oz)]
     x = ox
     z = oz
     for i in range(1, segs + 1):
-        turn = _rand_range(cell_x, cell_z, cfg.seed, 5110 + i, -0.64, 0.64)
-        turn += np.sin(i * 1.81 + _rand_range(cell_x, cell_z, cfg.seed, 5111, 0.0, np.pi * 2.0)) * 0.18
+        turn = _rand_range(cell_x, cell_z, cfg.seed, 5110 + i, -0.52, 0.52)
+        turn += np.sin(i * 1.81 + _rand_range(cell_x, cell_z, cfg.seed, 5111, 0.0, np.pi * 2.0)) * 0.12
         angle += turn + bias
-        step = _rand_range(cell_x, cell_z, cfg.seed, 5120 + i, 34.0, 66.0)
-        if i % 5 == 0:
-            step *= 0.72
+        step = _rand_range(cell_x, cell_z, cfg.seed, 5120 + i, 16.0, 34.0)
+        if i == segs:
+            step *= _rand_range(cell_x, cell_z, cfg.seed, 5125 + i, 0.55, 0.88)
         x += np.cos(angle) * step
         z += np.sin(angle) * step
         nodes.append((x, z))
     return nodes
 
 
+def _segment_distance_field(X, Z, ax, az, bx, bz):
+    vx = bx - ax
+    vz = bz - az
+    length2 = vx * vx + vz * vz
+    if length2 <= 0.001:
+        return np.sqrt((X - ax) ** 2 + (Z - az) ** 2)
+    t = ((X - ax) * vx + (Z - az) * vz) / length2
+    t = np.clip(t, 0.0, 1.0)
+    px = ax + vx * t
+    pz = az + vz * t
+    return np.sqrt((X - px) ** 2 + (Z - pz) ** 2)
+
+
 def _finite_river_field(cfg, X, Z, mountain_mask, temp=None, hum=None):
     if not cfg.rivers or cfg.river_amount <= 0.0:
         zeros = np.zeros(X.shape, dtype=np.float64)
-        return zeros, zeros
+        return zeros, zeros, np.full(X.shape, int(cfg.water_level), dtype=np.int32)
 
-    # Cheap vanilla-layer style rivers: a heavily domain-warped contour layer,
-    # gated by a broad basin layer so they form coherent meanders instead of
-    # every zero-contour becoming a world-spanning stripe. This is much closer
-    # to old Minecraft's river-biome feel than the previous finite spline pass.
-    s = cfg.seed
+    # Modern Minecraft uses local water levels for aquifer-like bodies instead
+    # of letting every cave/river below sea level flood. This hybrid version does
+    # the same for surface rivers: short finite paths, each with one flat water
+    # surface, and terrain is only allowed to bend a few blocks toward it.
     amount = np.clip(cfg.river_amount, 0.0, 1.0)
-    warp_scale = 360.0
-    warp_x = (noise.fbm2d(X + 14321, Z - 9182, s + 5201, octaves=3, freq=1 / warp_scale) - 0.5) * 135.0
-    warp_z = (noise.fbm2d(X - 2421, Z + 11017, s + 5202, octaves=3, freq=1 / warp_scale) - 0.5) * 135.0
-    warp_x += (noise.fbm2d(X + 991, Z + 222, s + 5203, octaves=2, freq=1 / 145.0) - 0.5) * 32.0
-    warp_z += (noise.fbm2d(X - 133, Z - 771, s + 5204, octaves=2, freq=1 / 145.0) - 0.5) * 32.0
-    RX = X + warp_x
-    RZ = Z + warp_z
+    spacing = int(round(245.0 - amount * 55.0))
+    reach = 118
+    core = np.zeros(X.shape, dtype=np.float64)
+    valley = np.zeros(X.shape, dtype=np.float64)
+    level = np.full(X.shape, int(cfg.water_level), dtype=np.int32)
+    level_strength = np.zeros(X.shape, dtype=np.float64)
 
-    river_noise = noise.fbm2d(RX, RZ, s + 5210, octaves=5, freq=1 / 250.0)
-    center_dist = np.abs(river_noise - 0.5) * 2.0
+    min_x = int(np.floor(float(X.min())))
+    max_x = int(np.ceil(float(X.max())))
+    min_z = int(np.floor(float(Z.min())))
+    max_z = int(np.ceil(float(Z.max())))
+    cx0 = (min_x - reach) // spacing - 1
+    cx1 = (max_x + reach) // spacing + 1
+    cz0 = (min_z - reach) // spacing - 1
+    cz1 = (max_z + reach) // spacing + 1
 
-    basin = noise.fbm2d(RX + 3111, RZ - 1999, s + 5220, octaves=3, freq=1 / 760.0)
-    gate = _smoothstep01((basin - (0.35 - amount * 0.08)) / 0.19)
+    for cell_z in range(cz0, cz1 + 1):
+        for cell_x in range(cx0, cx1 + 1):
+            active = 0.28 + amount * 0.28
+            if _rand01(cell_x, cell_z, cfg.seed, 5160) > active:
+                continue
 
-    # Breaker gate avoids one unbroken line crossing the whole map, but it is
-    # broad/soft so the river does not look chopped into tiny blue worms.
-    breaker = noise.fbm2d(RX - 8080, RZ + 4040, s + 5230, octaves=2, freq=1 / 420.0)
-    breaker_gate = _smoothstep01((breaker - 0.28) / 0.24)
+            nodes = _build_river_nodes(cfg, cell_x, cell_z, spacing)
+            sx, sz = nodes[0]
+            sy = _surface_height_at(cfg, None, sx, sz)
+            body_level = int(round(sy - _rand_range(cell_x, cell_z, cfg.seed, 5161, 0.15, 0.85)))
+            body_level = int(np.clip(body_level, cfg.floor_y + 8, MIN_Y + WORLD_HEIGHT - 42))
+            width_base = _rand_range(cell_x, cell_z, cfg.seed, 5162, 4.8, 7.4) * (0.88 + amount * 0.24)
 
-    width = 0.030 + amount * 0.021
-    core = _smoothstep01((width - center_dist) / max(width, 0.0001))
-    valley = _smoothstep01((width * 3.4 - center_dist) / max(width * 3.4, 0.0001))
-
-    # Low-frequency wobble fattens/thins banks naturally instead of a constant
-    # blue rail. The channel remains continuous inside the valley.
-    width_wobble = 0.78 + 0.42 * noise.fbm2d(RX + 71, RZ - 91, s + 5240, octaves=2, freq=1 / 88.0)
-    core = np.clip(core * width_wobble, 0.0, 1.0)
-    valley = np.clip(valley * (0.80 + 0.30 * width_wobble), 0.0, 1.0)
-
-    core *= gate * breaker_gate
-    valley *= gate * (0.55 + 0.45 * breaker_gate)
+            for i in range(len(nodes) - 1):
+                ax, az = nodes[i]
+                bx, bz = nodes[i + 1]
+                d = _segment_distance_field(X, Z, ax, az, bx, bz)
+                width = width_base * _rand_range(cell_x, cell_z, cfg.seed, 5170 + i, 0.82, 1.22)
+                bank = width + _rand_range(cell_x, cell_z, cfg.seed, 5180 + i, 13.0, 22.0)
+                c = _smoothstep01((width - d) / max(width, 0.001))
+                v = _smoothstep01((bank - d) / max(bank, 0.001))
+                wobble = 0.82 + 0.36 * noise.fbm2d(X + cell_x * 31 + i * 17, Z - cell_z * 29 - i * 19,
+                                                   cfg.seed + 5190, octaves=2, freq=1 / 38.0)
+                c = np.clip(c * wobble, 0.0, 1.0)
+                v = np.clip(v * (0.88 + 0.20 * wobble), 0.0, 1.0)
+                stronger = c > level_strength
+                level = np.where(stronger, body_level, level)
+                level_strength = np.maximum(level_strength, c)
+                core = np.maximum(core, c)
+                valley = np.maximum(valley, v)
 
     if temp is not None:
-        cold_suppression = np.where(temp < cfg.biome_frozen_cut + 0.03, 0.28, 1.0)
+        cold_suppression = np.where(temp < cfg.biome_frozen_cut + 0.02, 0.40, 1.0)
         core *= cold_suppression
-        valley *= np.maximum(cold_suppression, 0.68)
+        valley *= np.maximum(cold_suppression, 0.70)
     if hum is not None:
-        dry_suppression = np.where(hum < 0.20, 0.72, 1.0)
+        dry_suppression = np.where(hum < 0.18, 0.70, 1.0)
         core *= dry_suppression
         valley *= np.maximum(dry_suppression, 0.80)
 
-    mountain = mountain_mask > 0.56
-    core[mountain] *= 0.15
-    valley[mountain] *= 0.42
-    return np.clip(core, 0.0, 1.0), np.clip(valley, 0.0, 1.0)
+    mountain = mountain_mask > 0.64
+    core[mountain] *= 0.24
+    valley[mountain] *= 0.46
+    return np.clip(core, 0.0, 1.0), np.clip(valley, 0.0, 1.0), level.astype(np.int32)
+
+
+def _finite_lake_field(cfg, X, Z, mountain_mask, temp=None, hum=None):
+    if not cfg.lakes or cfg.lake_amount <= 0.0:
+        zeros = np.zeros(X.shape, dtype=np.float64)
+        return zeros, zeros, np.full(X.shape, int(cfg.water_level), dtype=np.int32)
+
+    amount = np.clip(cfg.lake_amount, 0.0, 1.0)
+    spacing = int(round(235.0 - amount * 48.0))
+    reach = 72
+    core = np.zeros(X.shape, dtype=np.float64)
+    bank = np.zeros(X.shape, dtype=np.float64)
+    level = np.full(X.shape, int(cfg.water_level), dtype=np.int32)
+    level_strength = np.zeros(X.shape, dtype=np.float64)
+
+    min_x = int(np.floor(float(X.min())))
+    max_x = int(np.ceil(float(X.max())))
+    min_z = int(np.floor(float(Z.min())))
+    max_z = int(np.ceil(float(Z.max())))
+    cx0 = (min_x - reach) // spacing - 1
+    cx1 = (max_x + reach) // spacing + 1
+    cz0 = (min_z - reach) // spacing - 1
+    cz1 = (max_z + reach) // spacing + 1
+
+    for cell_z in range(cz0, cz1 + 1):
+        for cell_x in range(cx0, cx1 + 1):
+            active = 0.08 + amount * 0.18
+            if _rand01(cell_x, cell_z, cfg.seed, 5310) > active:
+                continue
+            ox = cell_x * spacing + _rand_range(cell_x, cell_z, cfg.seed, 5311, 24.0, spacing - 24.0)
+            oz = cell_z * spacing + _rand_range(cell_x, cell_z, cfg.seed, 5312, 24.0, spacing - 24.0)
+            sy = _surface_height_at(cfg, None, ox, oz)
+            body_level = int(round(sy - _rand_range(cell_x, cell_z, cfg.seed, 5313, 0.6, 1.2)))
+            body_level = int(np.clip(body_level, cfg.floor_y + 8, MIN_Y + WORLD_HEIGHT - 42))
+            rx = _rand_range(cell_x, cell_z, cfg.seed, 5314, 9.0, 22.0) * (0.85 + amount * 0.42)
+            rz = _rand_range(cell_x, cell_z, cfg.seed, 5315, 9.0, 22.0) * (0.85 + amount * 0.42)
+            ang = _rand_range(cell_x, cell_z, cfg.seed, 5316, 0.0, np.pi * 2.0)
+            ca = np.cos(ang)
+            sa = np.sin(ang)
+            dx = X - ox
+            dz = Z - oz
+            lx = dx * ca + dz * sa
+            lz = -dx * sa + dz * ca
+            d = np.sqrt((lx / max(1.0, rx)) ** 2 + (lz / max(1.0, rz)) ** 2)
+            c = _smoothstep01((1.0 - d) / 0.22)
+            b = _smoothstep01((1.80 - d) / 0.72)
+            stronger = c > level_strength
+            level = np.where(stronger, body_level, level)
+            level_strength = np.maximum(level_strength, c)
+            core = np.maximum(core, c)
+            bank = np.maximum(bank, b)
+
+    if temp is not None:
+        cold_suppression = np.where(temp < cfg.biome_frozen_cut + 0.02, 0.34, 1.0)
+        core *= cold_suppression
+        bank *= np.maximum(cold_suppression, 0.70)
+    if hum is not None:
+        dry_suppression = np.where(hum < 0.18, 0.80, 1.0)
+        core *= dry_suppression
+        bank *= np.maximum(dry_suppression, 0.86)
+    high = mountain_mask > 0.46
+    core[high] *= 0.16
+    bank[high] *= 0.38
+    return np.clip(core, 0.0, 1.0), np.clip(bank, 0.0, 1.0), level.astype(np.int32)
+
+
+def _surface_lava_pool_field(cfg, X, Z, mountain_mask, temp=None, hum=None):
+    if not getattr(cfg, "surface_lava_pools", True) or not getattr(cfg, "fluids", True):
+        zeros = np.zeros(X.shape, dtype=np.float64)
+        return zeros, zeros, np.full(X.shape, int(cfg.water_level), dtype=np.int32)
+
+    spacing = 285
+    reach = 44
+    core = np.zeros(X.shape, dtype=np.float64)
+    bank = np.zeros(X.shape, dtype=np.float64)
+    level = np.full(X.shape, int(cfg.water_level), dtype=np.int32)
+    level_strength = np.zeros(X.shape, dtype=np.float64)
+
+    min_x = int(np.floor(float(X.min())))
+    max_x = int(np.ceil(float(X.max())))
+    min_z = int(np.floor(float(Z.min())))
+    max_z = int(np.ceil(float(Z.max())))
+    cx0 = (min_x - reach) // spacing - 1
+    cx1 = (max_x + reach) // spacing + 1
+    cz0 = (min_z - reach) // spacing - 1
+    cz1 = (max_z + reach) // spacing + 1
+
+    for cell_z in range(cz0, cz1 + 1):
+        for cell_x in range(cx0, cx1 + 1):
+            if _rand01(cell_x, cell_z, cfg.seed, 5440) > 0.155:
+                continue
+            ox = cell_x * spacing + _rand_range(cell_x, cell_z, cfg.seed, 5441, 28.0, spacing - 28.0)
+            oz = cell_z * spacing + _rand_range(cell_x, cell_z, cfg.seed, 5442, 28.0, spacing - 28.0)
+            sy = _surface_height_at(cfg, None, ox, oz)
+            body_level = int(round(sy - _rand_range(cell_x, cell_z, cfg.seed, 5443, 0.20, 0.70)))
+            body_level = int(np.clip(body_level, cfg.floor_y + 10, MIN_Y + WORLD_HEIGHT - 50))
+            rx = _rand_range(cell_x, cell_z, cfg.seed, 5444, 3.5, 6.5)
+            rz = _rand_range(cell_x, cell_z, cfg.seed, 5445, 3.5, 6.5)
+            ang = _rand_range(cell_x, cell_z, cfg.seed, 5446, 0.0, np.pi * 2.0)
+            ca = np.cos(ang)
+            sa = np.sin(ang)
+            dx = X - ox
+            dz = Z - oz
+            lx = dx * ca + dz * sa
+            lz = -dx * sa + dz * ca
+            d = np.sqrt((lx / max(1.0, rx)) ** 2 + (lz / max(1.0, rz)) ** 2)
+            c = _smoothstep01((1.0 - d) / 0.24)
+            b = _smoothstep01((1.55 - d) / 0.55)
+            stronger = c > level_strength
+            level = np.where(stronger, body_level, level)
+            level_strength = np.maximum(level_strength, c)
+            core = np.maximum(core, c)
+            bank = np.maximum(bank, b)
+
+    if temp is not None:
+        warm_bias = np.where(temp >= cfg.biome_warm_cut - 0.04, 1.0, 0.52)
+        core *= warm_bias
+        bank *= np.maximum(warm_bias, 0.62)
+    if hum is not None:
+        wet_suppression = np.where(hum > 0.72, 0.50, 1.0)
+        core *= wet_suppression
+        bank *= np.maximum(wet_suppression, 0.56)
+    high = mountain_mask > 0.62
+    core[high] *= 0.70
+    bank[high] *= 0.82
+    return np.clip(core, 0.0, 1.0), np.clip(bank, 0.0, 1.0), level.astype(np.int32)
+
 
 def _coord_grids(cx, cz):
     xs = cx * 16 + np.arange(16)
@@ -575,34 +960,222 @@ def _coord_grids(cx, cz):
     return X.astype(np.float64), Z.astype(np.float64)
 
 
-def _terrain_height_fields(cfg, X, Z):
+def _raw_terrain_height_fields(cfg, X, Z):
     s = cfg.seed
-    hills = (noise.fbm2d(X, Z, s + 1, octaves=4, freq=1 / 72.0) - 0.5) * 2.0
-    detail = (noise.fbm2d(X, Z, s + 11, octaves=3, freq=1 / 28.0) - 0.5) * 2.0
-    mnt_mask = noise.fbm2d(X, Z, s + 2, octaves=4, freq=1 / 330.0)
-    lo = 0.66 - 0.14 * cfg.mountain_amount
-    mnt = np.clip((mnt_mask - lo) / (0.83 - lo), 0.0, 1.0) ** 1.8
-    ridge = 1.0 - np.abs(noise.fbm2d(X, Z, s + 12, octaves=3, freq=1 / 125.0) - 0.5) * 2.0
+    hills = (noise.fbm2d(X, Z, s + 1, octaves=4, freq=1 / 112.0) - 0.5) * 2.0
+    detail = (noise.fbm2d(X, Z, s + 11, octaves=3, freq=1 / 74.0) - 0.5) * 2.0
 
-    range_noise = noise.fbm2d(X - 1700, Z + 2600, s + 14, octaves=4, freq=1 / 620.0)
-    range_gate = _smoothstep01((range_noise - (0.67 - cfg.extreme_mountain_amount * 0.10)) / 0.18)
-    range_ridge = 1.0 - np.abs(noise.fbm2d(X + 6400, Z - 3100, s + 15, octaves=4, freq=1 / 155.0) - 0.5) * 2.0
-    range_ridge = np.clip(range_ridge, 0.0, 1.0) ** 2.2
-    range_detail = (noise.fbm2d(X - 9100, Z + 4200, s + 16, octaves=3, freq=1 / 48.0) - 0.5) * 2.0
-    extreme = range_gate * (range_ridge * 0.82 + np.maximum(0.0, range_detail) * 0.18)
+    # Mountains should be roundish provinces with rough ridges on top, not huge
+    # raised continents. The amount slider now mostly controls how many cells can
+    # become mountains; the peak height comes from the amp slider. This keeps the
+    # raised deep-dark world from turning large snowy areas into plateaus.
+    amount = np.clip(float(cfg.mountain_amount), 0.0, 1.0)
+    extreme_amount = np.clip(float(cfg.extreme_mountain_amount), 0.0, 1.0)
+
+    mnt_mask = noise.fbm2d(X, Z, s + 2, octaves=4, freq=1 / 610.0)
+    province = noise.fbm2d(X - 2900, Z + 1700, s + 16, octaves=3, freq=1 / 760.0)
+    province_gate = _smoothstep01((province - (0.39 - amount * 0.050)) / 0.34)
+    lo = 0.530 - 0.115 * amount
+    mnt = _smoothstep01((mnt_mask - lo) / max(0.001, 0.90 - lo)) ** 1.32
+    mnt *= 0.58 + province_gate * 0.42
+
+    ridge_raw = 1.0 - np.abs(noise.fbm2d(X, Z, s + 12, octaves=3, freq=1 / 250.0) - 0.5) * 2.0
+    ridge = _smoothstep01((ridge_raw - 0.30) / 0.62) ** 1.18
+
+    range_noise = noise.fbm2d(X - 1700, Z + 2600, s + 14, octaves=4, freq=1 / 980.0)
+    range_gate = _smoothstep01((range_noise - (0.625 - extreme_amount * 0.070)) / 0.30)
+    range_ridge = 1.0 - np.abs(noise.fbm2d(X + 6400, Z - 3100, s + 15, octaves=4, freq=1 / 300.0) - 0.5) * 2.0
+    range_ridge = _smoothstep01((range_ridge - 0.25) / 0.66) ** 1.48
+    extreme = range_gate * range_ridge
+
+    peak_noise = noise.fbm2d(X + 11200, Z - 8800, s + 18, octaves=4, freq=1 / 540.0)
+    peak_gate = _smoothstep01((peak_noise - 0.655) / 0.245)
+    peak_ridge = 1.0 - np.abs(noise.fbm2d(X - 14400, Z + 5300, s + 19, octaves=4, freq=1 / 190.0) - 0.5) * 2.0
+    peak_ridge = _smoothstep01((peak_ridge - 0.22) / 0.60) ** 1.34
+    alpine_peak = peak_gate * peak_ridge * (0.45 + 0.55 * province_gate)
+
+    mnt_rough = (noise.fbm2d(X + 4100, Z - 2700, s + 21, octaves=3, freq=1 / 92.0) - 0.5) * 2.0
+    mnt_medium = (noise.fbm2d(X - 6200, Z + 1500, s + 22, octaves=3, freq=1 / 150.0) - 0.5) * 2.0
+    mnt_shape = _smoothstep01(np.maximum.reduce((mnt, extreme * 0.78, alpine_peak * 0.88)))
 
     Hf = (cfg.base_height
-          + hills * cfg.hill_amp
-          + detail * 2.6
-          + mnt * cfg.mountain_amp
-          + (mnt ** 1.3) * ridge * cfg.mountain_amp * 0.5
-          + extreme * cfg.mountain_amp * 0.95)
-    mnt = np.clip(np.maximum(mnt, extreme * 0.92), 0.0, 1.0)
-    return Hf, mnt
+          + hills * cfg.hill_amp * 0.72
+          + detail * 0.42
+          + mnt * cfg.mountain_amp * 0.64
+          + (mnt ** 1.18) * ridge * cfg.mountain_amp * 0.28
+          + extreme * cfg.mountain_amp * 0.64
+          + alpine_peak * cfg.mountain_amp * 1.70
+          + mnt_shape * (mnt_medium * cfg.mountain_amp * 0.090
+                         + mnt_rough * cfg.mountain_amp * 0.052))
+    return Hf, mnt_shape
+
+
+def _blur_height_grid(grid):
+    p = np.pad(grid, 2, mode="edge")
+    # Keep this kernel normalized. The old weights summed to 1.08, which subtly
+    # pushed every smoothing pass uphill and made the raised-terrain version drift
+    # into too many snowy/mountain cells while water-body banks kept fighting an
+    # inflated local average.
+    return (p[2:-2, 2:-2] * 0.28 +
+            (p[1:-3, 2:-2] + p[3:-1, 2:-2] + p[2:-2, 1:-3] + p[2:-2, 3:-1]) * 0.13 +
+            (p[1:-3, 1:-3] + p[1:-3, 3:-1] + p[3:-1, 1:-3] + p[3:-1, 3:-1]) * 0.045 +
+            (p[0:-4, 2:-2] + p[4:, 2:-2] + p[2:-2, 0:-4] + p[2:-2, 4:]) * 0.025) / 1.08
+
+
+def _relax_height_grid(grid, max_step=4.5, passes=4):
+    # Local erosion-style relaxation. The previous min-neighbor/max-neighbor
+    # clamp fought itself whenever a low column and high column touched the same
+    # cell, which could amplify one-column cuts into long ditch valleys. Clamp
+    # only against the local median and blend a little toward the local mean so
+    # genuine slopes survive while biome seams and accidental trenches get worn
+    # down deterministically on the expanded sample grid.
+    out = grid.astype(np.float64, copy=True)
+    for _ in range(max(1, int(passes))):
+        p = np.pad(out, 1, mode="edge")
+        n0 = p[0:-2, 1:-1]
+        n1 = p[2:, 1:-1]
+        n2 = p[1:-1, 0:-2]
+        n3 = p[1:-1, 2:]
+        d0 = p[0:-2, 0:-2]
+        d1 = p[0:-2, 2:]
+        d2 = p[2:, 0:-2]
+        d3 = p[2:, 2:]
+        neigh = np.stack((n0, n1, n2, n3, d0, d1, d2, d3), axis=0)
+        med = np.median(neigh, axis=0)
+        avg = (n0 + n1 + n2 + n3) * 0.25
+        out = np.minimum(out, med + max_step)
+        out = np.maximum(out, med - max_step)
+        out = out * 0.82 + avg * 0.18
+    return out
+
+
+def _soft_mask(mask, passes=2):
+    out = mask.astype(np.float64)
+    for _ in range(max(1, int(passes))):
+        out = _blur_height_grid(out)
+    return np.clip(out, 0.0, 1.0)
+
+
+def _terrain_height_fields(cfg, X, Z):
+    # Sample terrain on a small border, smooth it, then crop back. This fixes the
+    # post-height-shift vertical cone/wall look without introducing chunk seams.
+    if X.ndim == 2 and Z.ndim == 2 and X.shape == Z.shape:
+        h, w = X.shape
+        if h > 0 and w > 0:
+            margin = 4
+            if h == 1 and w == 1:
+                cx = float(X[0, 0])
+                cz = float(Z[0, 0])
+                xs = cx + np.arange(-margin, margin + 1, dtype=np.float64)
+                zs = cz + np.arange(-margin, margin + 1, dtype=np.float64)
+                Xe, Ze = np.meshgrid(xs, zs)
+                He, Me = _raw_terrain_height_fields(cfg, Xe, Ze)
+                blur1 = _blur_height_grid(He)
+                blur2 = _blur_height_grid(blur1)
+                He = He * 0.68 + blur1 * 0.24 + blur2 * 0.08
+                He = _relax_height_grid(He, max_step=8.0, passes=1)
+                Me = _blur_height_grid(Me)
+                center = margin
+                return He[center:center + 1, center:center + 1], Me[center:center + 1, center:center + 1]
+
+            dx_ok = w == 1 or np.allclose(np.diff(X[0]), 1.0)
+            dz_ok = h == 1 or np.allclose(np.diff(Z[:, 0]), 1.0)
+            grid_ok = dx_ok and dz_ok and np.allclose(X, X[0, :][None, :]) and np.allclose(Z, Z[:, 0][:, None])
+            if grid_ok:
+                xs = np.arange(float(X[0, 0]) - margin, float(X[0, -1]) + margin + 1, dtype=np.float64)
+                zs = np.arange(float(Z[0, 0]) - margin, float(Z[-1, 0]) + margin + 1, dtype=np.float64)
+                Xe, Ze = np.meshgrid(xs, zs)
+                He, Me = _raw_terrain_height_fields(cfg, Xe, Ze)
+                blur1 = _blur_height_grid(He)
+                blur2 = _blur_height_grid(blur1)
+                He = He * 0.68 + blur1 * 0.24 + blur2 * 0.08
+                He = _relax_height_grid(He, max_step=8.0, passes=1)
+                Me = _blur_height_grid(Me)
+                return He[margin:margin + h, margin:margin + w], Me[margin:margin + h, margin:margin + w]
+
+    return _raw_terrain_height_fields(cfg, X, Z)
+
+
+def _regular_unit_grid_info(X, Z):
+    if X.ndim != 2 or Z.ndim != 2 or X.shape != Z.shape:
+        return None
+    h, w = X.shape
+    if h <= 0 or w <= 0:
+        return None
+
+    if w > 1 and not np.allclose(np.diff(X[0]), 1.0):
+        return None
+    if h > 1 and not np.allclose(np.diff(Z[:, 0]), 1.0):
+        return None
+    if w > 1 and not np.allclose(X, X[0, :][None, :]):
+        return None
+    if h > 1 and not np.allclose(Z, Z[:, 0][:, None]):
+        return None
+
+    return h, w, float(X[0, 0]), float(X[0, -1]), float(Z[0, 0]), float(Z[-1, 0])
+
+
+def _crop_field_dict(fields, margin, h, w):
+    out = {}
+    for key, value in fields.items():
+        if isinstance(value, np.ndarray) and value.ndim == 2 and \
+                value.shape[0] >= margin + h and value.shape[1] >= margin + w:
+            out[key] = value[margin:margin + h, margin:margin + w]
+        else:
+            out[key] = value
+    return out
+
+
+def _smooth_final_height_grid(Hf):
+    if Hf.ndim != 2 or Hf.shape[0] < 3 or Hf.shape[1] < 3:
+        return Hf
+
+    # Smooth the height field as one continuous terrain surface, but do not
+    # crush the mountain range noise. Biomes no longer edit elevation, so this
+    # only needs to remove accidental one-column artifacts and not forcibly cap
+    # every slope into shallow terraces.
+    blur1 = _blur_height_grid(Hf)
+    blur2 = _blur_height_grid(blur1)
+    smoothed = Hf * 0.78 + blur1 * 0.16 + blur2 * 0.06
+    return _relax_height_grid(smoothed, max_step=8.0, passes=1)
+
+
+def _smooth_climate_grid(temp, hum, selector, edge_wobble):
+    if temp.ndim != 2 or temp.shape[0] < 3 or temp.shape[1] < 3:
+        return temp, hum, selector, edge_wobble
+
+    # Climate should be broad and continuous. Sharp high-frequency temperature
+    # noise is what allowed desert/snow to touch directly after the vertical
+    # terrain shift. Height stays independent from biomes; only the paint layer
+    # gets this wider temperature/humidity blending.
+    for _ in range(4):
+        temp = temp * 0.55 + _blur_height_grid(temp) * 0.45
+        hum = hum * 0.62 + _blur_height_grid(hum) * 0.38
+        selector = selector * 0.70 + _blur_height_grid(selector) * 0.30
+        edge_wobble = edge_wobble * 0.45 + _blur_height_grid(edge_wobble) * 0.55
+    return np.clip(temp, 0.0, 1.0), np.clip(hum, 0.0, 1.0), selector, edge_wobble
 
 
 def _fields(cfg, blocks, X, Z):
     """Return everything the column needs. All arrays are [z, x]."""
+    info = _regular_unit_grid_info(X, Z)
+    if info is not None:
+        h, w, x0, x1, z0, z1 = info
+        # Chunks and one-column structure lookups get an expanded border so the
+        # final erosion pass has context and cannot create seams. Large overview
+        # grids keep the cheaper direct path because they are only UI samples.
+        if max(h, w) <= 64:
+            margin = 10
+            xs = np.arange(x0 - margin, x1 + margin + 1, dtype=np.float64)
+            zs = np.arange(z0 - margin, z1 + margin + 1, dtype=np.float64)
+            Xe, Ze = np.meshgrid(xs, zs)
+            fields = _fields_core(cfg, blocks, Xe, Ze, smooth_heights=True)
+            return _crop_field_dict(fields, margin, h, w)
+
+    return _fields_core(cfg, blocks, X, Z, smooth_heights=False)
+
+
+def _fields_core(cfg, blocks, X, Z, smooth_heights):
     s = cfg.seed
     wl = cfg.water_level
 
@@ -611,67 +1184,169 @@ def _fields(cfg, blocks, X, Z):
 
     # --- climate --------------------------------------------------------
     temp, hum, selector, edge_wobble = _base_climate_fields(cfg, X, Z, Hf)
+    if smooth_heights:
+        temp, hum, selector, edge_wobble = _smooth_climate_grid(temp, hum, selector, edge_wobble)
     biome, temp_band, hum_band, badlands_strength = _classify_biomes(cfg, X, Z, Hf, mnt, temp, hum, selector, edge_wobble)
 
-    # Jungles get rougher, more chaotic ground instead of reading like plains
-    # with green trees. Badlands get dry eroded ribs without taking over every
-    # normal hill. Keep this before rivers so channels still cut through it.
-    jungle = biome == "minecraft:jungle"
-    if jungle.any():
-        jungle_roll = (noise.fbm2d(X + 3210, Z - 5410, s + 86, octaves=4, freq=1 / 58.0) - 0.5) * 2.0
-        jungle_mounds = _smoothstep01((noise.fbm2d(X - 8100, Z + 2200, s + 87, octaves=3, freq=1 / 135.0) - 0.47) / 0.28)
-        Hf += jungle * (jungle_roll * 5.8 + jungle_mounds * 10.5)
-        mnt = np.clip(np.maximum(mnt, jungle_mounds * 0.24), 0.0, 1.0)
-
-    badlands = biome == "minecraft:badlands"
-    mesa_lift = badlands_strength
-    if np.any(mesa_lift > 0.035):
-        mesa_ribs = 1.0 - np.abs(noise.fbm2d(X - 4400, Z + 8850, s + 88, octaves=3, freq=1 / 72.0) - 0.5) * 2.0
-        mesa_ribs = np.clip(mesa_ribs, 0.0, 1.0) ** 2.0
-        mesa_terrace = np.floor((Hf + (noise.fbm2d(X + 1024, Z - 2048, s + 89, octaves=2, freq=1 / 54.0) - 0.5) * 9.0) / 3.0) * 3.0 - Hf
-        Hf += mesa_lift * (mesa_ribs * 10.5 + mesa_terrace * 0.32)
-        mnt = np.clip(np.maximum(mnt, mesa_lift * 0.28), 0.0, 1.0)
-
+    # Keep hot/normal biome paint independent from elevation, but let cold
+    # climates bias the existing mountain/ridge field upward in one broad smooth
+    # mask. That gives snowy regions naturally hillier, higher terrain without
+    # creating a desert/snow staircase seam at the exact biome edge.
     is_desert = biome == "minecraft:desert"
     is_badlands = biome == "minecraft:badlands"
     is_arid = is_desert | is_badlands
 
+    cold_relief = _smoothstep01(((cfg.biome_cold_cut + 0.14) - temp_band) / 0.34)
+    cold_relief *= 1.0 - _smoothstep01((hum_band - 0.94) / 0.12)
+
+    frozen_paint = ((biome == "minecraft:snowy_plains") |
+                    (biome == "minecraft:snowy_taiga") |
+                    (biome == "minecraft:snowy_slopes")).astype(np.float64)
+    if frozen_paint.ndim == 2 and min(frozen_paint.shape) >= 3:
+        frozen_region = _soft_mask(frozen_paint, passes=4)
+    else:
+        frozen_region = frozen_paint
+
+    frozen_relief = _smoothstep01(((cfg.biome_frozen_cut + 0.070) - temp_band) / 0.20)
+    frozen_relief *= 1.0 - _smoothstep01((hum_band - 0.965) / 0.11)
+    frozen_relief = np.maximum(frozen_relief, frozen_region * 0.92)
+
+    cold_lumps = (noise.fbm2d(X + 5100, Z - 5100, s + 74, octaves=3, freq=1 / 150.0) - 0.5) * 2.0
+    cold_ridges = 1.0 - np.abs(noise.fbm2d(X - 9700, Z + 9700, s + 75, octaves=3, freq=1 / 220.0) - 0.5) * 2.0
+    cold_ridges = _smoothstep01((cold_ridges - 0.24) / 0.66)
+
+    snow_range = noise.fbm2d(X + 14800, Z - 11800, s + 176, octaves=4, freq=1 / 430.0)
+    snow_range = _smoothstep01((snow_range - 0.31) / 0.45)
+    snow_ridges = 1.0 - np.abs(noise.fbm2d(X - 18100, Z + 12700, s + 177, octaves=4, freq=1 / 185.0) - 0.5) * 2.0
+    snow_ridges = _smoothstep01((snow_ridges - 0.20) / 0.64) ** 1.14
+    snow_peaks = 1.0 - np.abs(noise.fbm2d(X + 22100, Z - 16100, s + 178, octaves=3, freq=1 / 92.0) - 0.5) * 2.0
+    snow_peaks = _smoothstep01((snow_peaks - 0.34) / 0.52) ** 1.28
+    snow_roll = (noise.fbm2d(X - 23300, Z + 17500, s + 179, octaves=3, freq=1 / 125.0) - 0.5) * 2.0
+
+    # Keep snow regions hillier than temperate lowlands, but do not let snow
+    # itself manufacture continent-sized cliff walls. This matches the older
+    # pre-extreme pass behavior while still allowing isolated rocky snowy peaks.
+    snow_alpine = frozen_relief * (0.52 + 0.48 * snow_range)
+    Hf += cold_relief * (cold_lumps * cfg.hill_amp * 0.30 + cold_ridges * cfg.mountain_amp * 0.14 * (0.30 + 0.70 * mnt))
+    Hf += snow_alpine * (snow_roll * cfg.hill_amp * 0.78 +
+                         snow_range * cfg.mountain_amp * 0.20 +
+                         snow_ridges * cfg.mountain_amp * 0.64 +
+                         snow_ridges * snow_peaks * cfg.mountain_amp * 0.74)
+    mnt = np.clip(np.maximum(mnt, snow_alpine * (snow_ridges * 0.70 + snow_peaks * 0.30)), 0.0, 1.0)
+
+    if smooth_heights:
+        lowland_flat = 1.0 - _smoothstep01((mnt - 0.14) / 0.24)
+        low_blur = _blur_height_grid(Hf)
+        low_blur2 = _blur_height_grid(low_blur)
+        low_smoothed = Hf * 0.68 + low_blur * 0.22 + low_blur2 * 0.10
+        Hf = Hf * (1.0 - lowland_flat * 0.28) + low_smoothed * (lowland_flat * 0.28)
+        Hf = _smooth_final_height_grid(Hf)
+
     # --- finite rivers + small lakes -----------------------------------
-    depress = np.zeros(X.shape, dtype=np.float64)  # 0..1 downward carve factor
-    river_core, river_valley = _finite_river_field(cfg, X, Z, mnt, temp_band, hum_band)
-    river_depress = np.clip(river_core * 1.25 + river_valley * 0.32, 0.0, 1.0)
-    depress = np.maximum(depress, river_depress)
-    is_river = river_core > 0.30
-    high = mnt > 0.45
+    river_core, river_valley, river_level = _finite_river_field(cfg, X, Z, mnt, temp_band, hum_band)
+    lake_core, lake_bank, lake_level = _finite_lake_field(cfg, X, Z, mnt, temp_band, hum_band)
+    lava_core, lava_bank, lava_level = _surface_lava_pool_field(cfg, X, Z, mnt, temp_band, hum_band)
 
-    if cfg.lakes:
-        # small ponds: higher frequency = smaller features, sparse gate
-        ln = noise.fbm2d(X + 500, Z + 500, s + 6, octaves=2, freq=1 / 46.0)
-        lgate = noise.fbm2d(X - 700, Z + 900, s + 61, octaves=2, freq=1 / 220.0)
-        cut = 0.11 + 0.05 * cfg.lake_amount
-        lf = np.clip((cut - ln) / 0.10, 0.0, 1.0)
-        lf = lf * np.clip((lgate - 0.48) / 0.22, 0.0, 1.0)
-        lf[high] = 0.0
-        depress = np.maximum(depress, lf)
+    # Rivers and ponds use flat local water planes. The important distinction is
+    # that the water level is decided by the feature body first, then nearby
+    # terrain is gently shaped into banks. We never ask the feature to excavate
+    # down to a global Y, which is what created the giant water ravines.
+    pre_water_hf = Hf.copy()
+    local_blur = _blur_height_grid(pre_water_hf) if pre_water_hf.ndim == 2 and min(pre_water_hf.shape) >= 3 else pre_water_hf
+    local_slope = np.abs(pre_water_hf - local_blur)
 
-    # carve terrain smoothly toward a bed (gentle banks, no cliff slices)
-    bed = wl - (2.0 + 3.2 * depress)
-    lowered = Hf * (1.0 - depress) + bed * depress
-    Hf = np.minimum(Hf, lowered)
+    feature_level = np.where(lake_core > river_core, lake_level, river_level).astype(np.int32)
+    feature_surface_f = feature_level.astype(np.float64)
+    cut_to_surface = pre_water_hf - feature_surface_f
 
-    H = np.clip(Hf, cfg.floor_y + 3, MIN_Y + WORLD_HEIGHT - 40).astype(np.int32)
+    mountain_water_gate = 1.0 - _smoothstep01((mnt - 0.30) / 0.22)
+    slope_water_gate = 1.0 - _smoothstep01((local_slope - 4.6) / 5.8)
+    shallow_gate = _smoothstep01((cut_to_surface + 0.10) / 0.45) * (1.0 - _smoothstep01((cut_to_surface - 2.20) / 0.90))
+    water_gate = np.clip(mountain_water_gate * slope_water_gate * shallow_gate, 0.0, 1.0)
 
-    # water wherever the surface sits below sea level
-    is_water = H <= wl - 1
-    is_river = is_river & is_water
+    river_core = river_core * water_gate
+    river_valley = river_valley * (0.16 + 0.84 * water_gate)
+    lake_core = lake_core * water_gate
+    lake_bank = lake_bank * (0.18 + 0.82 * water_gate)
+
+    river_water = river_core > 0.185
+    lake_water = lake_core > 0.315
+    water_feature = river_water | lake_water
+
+    bank_strength = np.clip(river_valley * 1.18 + lake_bank * 1.08, 0.0, 1.0)
+    bank_noise = (noise.fbm2d(X + 330, Z - 660, s + 73, octaves=2, freq=1 / 44.0) - 0.5) * 0.18
+
+    floodplain = bank_strength * (1.0 - _smoothstep01((np.abs(pre_water_hf - feature_surface_f) - 3.6) / 3.0))
+    floodplain = np.clip(floodplain, 0.0, 1.0)
+    floodplain_target = feature_surface_f + 0.14 + bank_noise
+    Hf = Hf * (1.0 - floodplain * 0.46) + floodplain_target * (floodplain * 0.46)
+
+    bank_target = feature_surface_f + 0.22 + bank_noise
+    bank_delta = np.maximum(0.0, Hf - bank_target)
+    bank_cut = np.minimum(bank_delta, 1.85) * bank_strength * 0.64
+    Hf = Hf - bank_cut
+
+    river_depth = 0.82 + 0.42 * np.clip(river_core, 0.0, 1.0)
+    lake_depth = 0.90 + 0.58 * np.clip(lake_core, 0.0, 1.0)
+    wanted_bed = np.where(lake_core > river_core,
+                          feature_surface_f - lake_depth,
+                          feature_surface_f - river_depth)
+    max_cut = 1.72 + 0.32 * np.clip(lake_core, 0.0, 1.0)
+    bed = np.maximum(wanted_bed, pre_water_hf - max_cut)
+    bed = np.minimum(bed, feature_surface_f - 1.0)
+    Hf = np.where(water_feature, np.minimum(Hf, bed), Hf)
+
+    # Rare hot surface lava pools use the same local-plane system as water, but
+    # they are smaller and cannot overlap river/lake floodplains.
+    lava_surface_f = lava_level.astype(np.float64)
+    lava_cut = Hf - lava_surface_f
+    lava_gate = (1.0 - np.clip(bank_strength * 1.55, 0.0, 1.0))
+    lava_gate *= 1.0 - _smoothstep01((np.abs(Hf - lava_surface_f) - 2.4) / 1.2)
+    lava_core = lava_core * np.clip(lava_gate, 0.0, 1.0)
+    lava_bank = lava_bank * np.clip(lava_gate, 0.0, 1.0)
+    lava_pool = lava_core > 0.425
+    lava_bank_strength = np.clip(lava_bank, 0.0, 1.0)
+    lava_target = lava_surface_f + 0.08
+    Hf = Hf * (1.0 - lava_bank_strength * 0.32) + lava_target * (lava_bank_strength * 0.32)
+    lava_bed = np.minimum(lava_surface_f - 1.0, Hf - np.clip(lava_cut, 0.0, 1.35))
+    lava_bed = np.minimum(lava_bed, lava_surface_f - 1.0)
+    Hf = np.where(lava_pool, np.minimum(Hf, lava_bed), Hf)
+
+    H = np.rint(np.clip(Hf, cfg.floor_y + 3, MIN_Y + WORLD_HEIGHT - 40)).astype(np.int32)
+    H = np.where(water_feature, np.minimum(H, feature_level - 1), H)
+    H = np.where(lava_pool, np.minimum(H, lava_level - 1), H)
+
+    # Natural sea-level water can still exist in low basins. Finite rivers and
+    # ponds use their own local water surface and are not pulled down to wl.
+    sea_water = H <= wl - 1
+    is_lava = lava_pool & ~water_feature & ~sea_water
+    is_water = (sea_water | water_feature) & ~is_lava
+    water_surface = np.full(X.shape, int(wl), dtype=np.int32)
+    water_surface = np.where(water_feature, feature_level, water_surface).astype(np.int32)
+    water_surface = np.where(is_water, np.maximum(water_surface, H + 1), H).astype(np.int32)
+    lava_surface = np.where(is_lava, np.maximum(lava_level, H + 1), H).astype(np.int32)
+    is_river = river_water & is_water
     biome[is_river] = "minecraft:river"
 
-    # beaches: shoreline band on land next to water (sand ring)
-    is_beach = (~is_water) & (H <= wl + 1) & (H >= wl - 2) & ~is_arid
+    # Beaches/river banks are local paint around the feature. Do not convert the
+    # whole arid biome edge into a sandstone retaining wall; just paint the shallow
+    # banks that actually border water.
+    local_shore = (river_valley > 0.110) | (lake_bank > 0.135)
+    sea_shore = (H <= wl + 1) & (H >= wl - 2)
+    is_beach = (~is_water) & (~is_lava) & (sea_shore | local_shore)
     biome[is_beach & (biome != "minecraft:snowy_plains") &
           (biome != "minecraft:snowy_taiga") & (biome != "minecraft:snowy_slopes")] = "minecraft:beach"
 
     # --- snow ----------------------------------------------------------
+    frozen_land = (biome == "minecraft:snowy_plains") | (biome == "minecraft:snowy_taiga") | (biome == "minecraft:snowy_slopes")
+    if H.ndim == 2 and min(H.shape) >= 3:
+        hb = _blur_height_grid(H.astype(np.float64))
+        local_relief = np.abs(H.astype(np.float64) - hb)
+    else:
+        local_relief = np.zeros_like(H, dtype=np.float64)
+    alpine_snow = frozen_land & ((H >= cfg.base_height + 31) |
+                                 ((H >= cfg.base_height + 22) & ((mnt > 0.34) | (local_relief > 2.2))))
+    biome[alpine_snow] = "minecraft:snowy_slopes"
     frozen_land = (biome == "minecraft:snowy_plains") | (biome == "minecraft:snowy_taiga") | (biome == "minecraft:snowy_slopes")
     is_snowy = (~is_arid) & (~is_water) & ((H >= cfg.snowline_y + 6) | frozen_land)
 
@@ -684,6 +1359,13 @@ def _fields(cfg, blocks, X, Z):
     top[(biome == "minecraft:snowy_plains")] = blocks.grass_snow
     top[biome == "minecraft:snowy_slopes"] = blocks.snow_block
     sub[biome == "minecraft:snowy_slopes"] = blocks.stone
+    snowy_rock_noise = noise.fbm2d(X - 27200, Z + 19100, s + 180, octaves=3, freq=1 / 68.0)
+    snowy_rock = ((biome == "minecraft:snowy_slopes") &
+                  ((H >= cfg.base_height + 76) |
+                   ((H >= cfg.base_height + 50) & ((mnt > 0.52) | (snowy_rock_noise > 0.54))) |
+                   (local_relief > 3.0)))
+    top[snowy_rock] = blocks.stone
+    sub[snowy_rock] = blocks.stone
     top[is_snowy & (top == blocks.grass)] = blocks.grass_snow
 
     top[is_desert] = blocks.sand
@@ -696,6 +1378,7 @@ def _fields(cfg, blocks, X, Z):
     return {
         "H": H, "biome": biome, "top": top, "sub": sub,
         "is_water": is_water, "is_river": is_river, "is_beach": is_beach,
+        "water_surface": water_surface, "is_lava": is_lava, "lava_surface": lava_surface,
         "is_desert": is_desert, "is_badlands": is_badlands,
         "is_snowy": is_snowy, "mnt": mnt,
         "badlands_strength": badlands_strength,
@@ -705,6 +1388,65 @@ def _fields(cfg, blocks, X, Z):
 # ---------------------------------------------------------------------------
 # Chunk generation
 # ---------------------------------------------------------------------------
+
+def generate_nether_chunk(cfg, blocks, biome_reg, cx, cz, bounds, rng_seed):
+    X, Z = _coord_grids(cx, cz)
+    nxmin, nxmax, nzmin, nzmax = bounds
+    inside = (X >= nxmin) & (X <= nxmax) & (Z >= nzmin) & (Z <= nzmax)
+    on_wall = inside & ((X == nxmin) | (X == nxmax) | (Z == nzmin) | (Z == nzmax))
+
+    block_ids = np.zeros((WORLD_HEIGHT, 16, 16), dtype=np.int16)
+    biome_ids = np.zeros((16, 16), dtype=np.int16)
+    H = np.full((16, 16), NETHER_BOX_CEILING_Y, dtype=np.int32)
+    is_water = np.zeros((16, 16), dtype=bool)
+    block_entities = []
+
+    if not inside.any():
+        biome_str = np.full((16, 16), "minecraft:plains", dtype=object)
+        for iz in range(16):
+            for ix in range(16):
+                biome_ids[iz, ix] = biome_reg.get("minecraft:plains")
+        return block_ids, biome_ids, H, biome_str, inside, is_water, block_entities
+
+    rng = np.random.default_rng(rng_seed)
+    nbm = underworld.nether_biome_map(cfg, X, Z)
+    names = np.array(underworld.NETHER_BIOMES, dtype=object)
+    biome_str = np.where(inside, names[nbm], "minecraft:plains")
+
+    y_lo = MIN_Y + 1
+    y_hi = NETHER_BOX_CEILING_Y - 1
+    yr = np.arange(y_lo, y_hi + 1)
+    band = slice(y_lo - MIN_Y, y_hi - MIN_Y + 1)
+    nb = yr.size
+    Xf = X.astype(np.float64)
+    Zf = Z.astype(np.float64)
+    Yb = yr[:, None, None].astype(np.float64)
+    X3 = np.broadcast_to(Xf[None, :, :], (nb, 16, 16))
+    Z3 = np.broadcast_to(Zf[None, :, :], (nb, 16, 16))
+    Y3 = np.broadcast_to(Yb, (nb, 16, 16))
+    interior = inside & ~on_wall
+    inside_b = np.broadcast_to(interior[None, :, :], (nb, 16, 16))
+    underworld._fill_nether(cfg, blocks, block_ids, band, X3, Y3, Z3,
+                            inside_b, yr, y_lo, y_hi, nbm, rng)
+
+    world_y = (np.arange(WORLD_HEIGHT) + MIN_Y).reshape(-1, 1, 1)
+    inside3 = inside[None, :, :]
+    box_y = (world_y >= MIN_Y) & (world_y <= NETHER_BOX_CEILING_Y)
+    block_ids[np.broadcast_to(inside3 & (world_y == MIN_Y), block_ids.shape)] = blocks.bedrock
+    block_ids[np.broadcast_to(inside3 & (world_y == NETHER_BOX_CEILING_Y), block_ids.shape)] = blocks.bedrock
+    block_ids[np.broadcast_to(on_wall[None, :, :] & box_y, block_ids.shape)] = blocks.bedrock
+
+    if cfg.structures and cfg.structure_plan:
+        block_entities = structures.stamp_structures(
+            cfg, blocks, block_ids, cx, cz, MIN_Y, WORLD_HEIGHT)
+
+    for iz in range(16):
+        for ix in range(16):
+            b = biome_str[iz, ix] if inside[iz, ix] else "minecraft:plains"
+            biome_ids[iz, ix] = biome_reg.get(b)
+
+    return block_ids, biome_ids, H, biome_str, inside, is_water, block_entities
+
 
 def generate_chunk(cfg, blocks, biome_reg, cx, cz, xmin, xmax, rng_seed):
     X, Z = _coord_grids(cx, cz)                    # [z, x]
@@ -716,13 +1458,16 @@ def generate_chunk(cfg, blocks, biome_reg, cx, cz, xmin, xmax, rng_seed):
     f = _fields(cfg, blocks, X, Z)
     H = f["H"]; biome_str = f["biome"]; top = f["top"]; sub = f["sub"]
     is_water = f["is_water"]; is_river = f["is_river"]; is_beach = f["is_beach"]
+    water_surface = f["water_surface"]
+    is_lava = f["is_lava"]; lava_surface = f["lava_surface"]
     is_desert = f["is_desert"]; is_badlands = f["is_badlands"]; is_snowy = f["is_snowy"]
 
     block_ids = np.zeros((WORLD_HEIGHT, 16, 16), dtype=np.int16)  # [y, z, x]
     world_y = (np.arange(WORLD_HEIGHT) + MIN_Y).reshape(-1, 1, 1)
     inside3 = inside[None, :, :]
     Hs = H[None, :, :]
-    floor = cfg.floor_y
+    overworld_floor = cfg.floor_y
+    floor = MIN_Y if cfg.deep_dark else cfg.floor_y
     rng = np.random.default_rng(rng_seed)
 
     # --- columns: bedrock floor, stone body, subsurface, top -----------
@@ -733,7 +1478,7 @@ def generate_chunk(cfg, blocks, biome_reg, cx, cz, xmin, xmax, rng_seed):
     block_ids[dirt_band] = sub3[dirt_band]
 
     if is_badlands.any():
-        _paint_badlands_bands(cfg, blocks, block_ids, X, Z, H, is_badlands, inside, world_y, floor)
+        _paint_badlands_bands(cfg, blocks, block_ids, X, Z, H, is_badlands, inside, world_y, overworld_floor)
 
     # --- stone variants + dirt/gravel pods (replace stone) -------------
     if cfg.stone_variants:
@@ -757,17 +1502,19 @@ def generate_chunk(cfg, blocks, biome_reg, cx, cz, xmin, xmax, rng_seed):
 
     # --- caves ----------------------------------------------------------
     if cfg.caves:
-        _carve_caves(cfg, blocks, block_ids, X, Z, H, inside, floor)
+        _carve_caves(cfg, blocks, block_ids, X, Z, H, inside, overworld_floor)
+        if cfg.deep_dark:
+            _carve_deep_dark_with_regular_caverns(cfg, blocks, block_ids, X, Z, H, inside, floor)
     if cfg.ravines:
         _carve_ravines(cfg, blocks, block_ids, X, Z, H, inside, on_wall,
-                       world_y, floor)
+                       world_y, floor, is_water | is_lava, is_beach)
 
     if is_water.any():
         _seal_water_beds(cfg, blocks, block_ids, H, is_water, is_river, inside,
                          on_wall, floor)
 
     # --- surface top block (land) --------------------------------------
-    land = inside & ~on_wall & ~is_water & (H > floor + 3)
+    land = inside & ~on_wall & ~is_water & ~is_lava & (H > floor + 3)
     arr_surf = (H - MIN_Y)
     fx, fz, fy = xx[land], zz[land], arr_surf[land]
     # only set if the cave/ravine didn't open the surface to sky
@@ -792,9 +1539,19 @@ def generate_chunk(cfg, blocks, biome_reg, cx, cz, xmin, xmax, rng_seed):
             yy2 = yb[m]
             block_ids[yy2, zz[m], xx[m]] = np.where(
                 bed_id[m] == blocks.clay, blocks.clay, block_ids[yy2, zz[m], xx[m]])
-        wl = cfg.water_level
-        water_fill = inside3 & is_water[None, :, :] & (world_y > Hs) & (world_y <= wl)
+        water_top = water_surface[None, :, :]
+        water_fill = inside3 & is_water[None, :, :] & (world_y > Hs) & (world_y <= water_top)
         block_ids[water_fill & (block_ids == 0)] = blocks.water
+
+    if is_lava.any():
+        lcol = inside & ~on_wall & is_lava
+        ly, lz, lx = arr_surf[lcol], zz[lcol], xx[lcol]
+        lava_bed_noise = noise.fbm2d(X + 910, Z - 910, cfg.seed + 76, octaves=2, freq=1 / 9.0)
+        lava_bed = np.where(lava_bed_noise > 0.58, blocks.magma, blocks.stone).astype(np.int16)
+        block_ids[ly, lz, lx] = lava_bed[lcol]
+        lava_top = lava_surface[None, :, :]
+        lava_fill = inside3 & is_lava[None, :, :] & (world_y > Hs) & (world_y <= lava_top)
+        block_ids[lava_fill & (block_ids == 0)] = blocks.lava
 
     # --- underground fluids + static liquid settling -------------------
     if cfg.fluids:
@@ -807,11 +1564,15 @@ def generate_chunk(cfg, blocks, biome_reg, cx, cz, xmin, xmax, rng_seed):
     # inside generated ravines/caves.
     _settle_liquid_flow(cfg, blocks, block_ids, inside, floor)
 
+    if cfg.deep_dark:
+        underworld.apply_deep_dark_palette(cfg, blocks, block_ids, X, Z, inside, rng)
+
     # --- ores (replace stone, stone variants, or badlands terracotta) ---
     replaceable = (blocks.stone, blocks.andesite, blocks.diorite,
                    blocks.granite, blocks.terracotta, blocks.orange_terracotta,
                    blocks.yellow_terracotta, blocks.brown_terracotta,
-                   blocks.red_terracotta, blocks.white_terracotta)
+                   blocks.red_terracotta, blocks.white_terracotta,
+                   blocks.deepslate, blocks.tuff, blocks.cobbled_deepslate)
     for ore in cfg.ores:
         oid = blocks.ore(ore.name)
         y_lo = max(floor + 1, ore.y_min)
@@ -827,25 +1588,34 @@ def generate_chunk(cfg, blocks, biome_reg, cx, cz, xmin, xmax, rng_seed):
             _place_blob(block_ids, ox, oy, oz, ore.vein_size, oid, rng, inside,
                         replaceable)
 
+    if cfg.deep_dark:
+        _place_deep_dark_ores(cfg, blocks, block_ids, H, inside, rng)
+
     # --- trees ----------------------------------------------------------
     if cfg.trees:
-        _place_trees(cfg, blocks, block_ids, H, biome_str, is_water, inside,
+        _place_trees(cfg, blocks, block_ids, H, biome_str, is_water | is_lava, inside,
                      on_wall, rng)
 
     # --- surface decoration (grass, flowers, sugar cane, cactus) -------
     if cfg.decorations:
-        _decorate(cfg, blocks, block_ids, H, biome_str, is_water,
+        _decorate(cfg, blocks, block_ids, H, biome_str, is_water | is_lava,
                   is_desert | is_badlands, is_snowy, inside, on_wall, rng)
 
     # --- snow layer -----------------------------------------------------
     if is_snowy.any():
-        cols = inside & ~on_wall & is_snowy & ~is_water & (H > floor + 3)
+        cols = inside & ~on_wall & is_snowy & ~is_water & ~is_lava & (H > floor + 3)
         sy = (H - MIN_Y) + 1
         valid = cols & (sy < WORLD_HEIGHT)
         syy, szz, sxx = sy[valid], zz[valid], xx[valid]
         below = block_ids[syy - 1, szz, sxx]
         ok = (block_ids[syy, szz, sxx] == 0) & (below != 0) & (below != blocks.water)
         block_ids[syy[ok], szz[ok], sxx[ok]] = blocks.snow_layer
+
+    # --- structures (stamp the parts overlapping this chunk) ------------
+    block_entities = []
+    if cfg.structures and cfg.structure_plan and inside.any():
+        block_entities = structures.stamp_structures(
+            cfg, blocks, block_ids, cx, cz, MIN_Y, WORLD_HEIGHT)
 
     # --- bedrock wall ---------------------------------------------------
     if cfg.wall and on_wall.any():
@@ -861,7 +1631,7 @@ def generate_chunk(cfg, blocks, biome_reg, cx, cz, xmin, xmax, rng_seed):
             b = biome_str[iz, ix] if inside[iz, ix] else "minecraft:plains"
             biome_ids[iz, ix] = biome_reg.get(b)
 
-    return block_ids, biome_ids, H, biome_str, inside, is_water
+    return block_ids, biome_ids, H, biome_str, inside, is_water, block_entities
 
 
 # ---------------------------------------------------------------------------
@@ -889,7 +1659,7 @@ def _surface_height_at(cfg, blocks, x, z):
     X = np.array([[float(x)]], dtype=np.float64)
     Z = np.array([[float(z)]], dtype=np.float64)
     Hf, _ = _terrain_height_fields(cfg, X, Z)
-    value = int(np.clip(Hf, cfg.floor_y + 3, MIN_Y + WORLD_HEIGHT - 40)[0, 0])
+    value = int(round(float(np.clip(Hf, cfg.floor_y + 3, MIN_Y + WORLD_HEIGHT - 40)[0, 0])))
     _SURFACE_HEIGHT_CACHE[key] = value
     return value
 
@@ -938,27 +1708,39 @@ def _paint_badlands_bands(cfg, blocks, block_ids, X, Z, H, is_badlands, inside,
 
 def _seal_water_beds(cfg, blocks, block_ids, H, is_water, is_river, inside,
                      on_wall, floor):
-    # Rivers/lakes are generated before cave carving. Without this cap, later
-    # cave systems can cut directly under the river bed and leave floating
-    # water sheets like the screenshot. Keep a shallow natural plug under every
-    # water column, deeper for rivers because they are long features.
+    # Rivers/lakes are generated before cave carving. After caves/ravines run,
+    # repair a shallow buffer around every water body so cave mouths cannot cut
+    # straight into the river edge and turn a two-block stream into a vertical
+    # stone ravine. Actual water columns get the deepest cap; nearby banks get a
+    # thinner plug that still allows caves a little farther away.
+    protected = (is_water | is_river) & inside & ~on_wall
+    if not protected.any():
+        return
+
+    buffer = _soft_mask(protected, passes=3)
     for iz in range(16):
         for ix in range(16):
-            if not inside[iz, ix] or on_wall[iz, ix] or not is_water[iz, ix]:
+            if not inside[iz, ix] or on_wall[iz, ix] or buffer[iz, ix] <= 0.035:
                 continue
+
             surf = int(H[iz, ix])
-            depth = 34 if is_river[iz, ix] else 16
+            if is_water[iz, ix]:
+                depth = 8 if is_river[iz, ix] else 7
+            else:
+                depth = 4 + int(buffer[iz, ix] * 5.0)
+
             y0 = max(floor + 1, surf - depth)
             y1 = min(surf, MIN_Y + WORLD_HEIGHT - 2)
             for wy in range(y0, y1 + 1):
                 yi = wy - MIN_Y
-                if block_ids[yi, iz, ix] == blocks.air:
-                    if wy >= surf - 1:
-                        block_ids[yi, iz, ix] = blocks.sand
-                    elif wy >= surf - 4:
-                        block_ids[yi, iz, ix] = blocks.sandstone
-                    else:
-                        block_ids[yi, iz, ix] = blocks.stone
+                if block_ids[yi, iz, ix] != blocks.air:
+                    continue
+                if wy >= surf - 1:
+                    block_ids[yi, iz, ix] = blocks.sand
+                elif wy >= surf - 4:
+                    block_ids[yi, iz, ix] = blocks.sandstone
+                else:
+                    block_ids[yi, iz, ix] = blocks.stone
 
 
 def _iter_feature_cells(X, Z, spacing, reach):
@@ -992,6 +1774,21 @@ def _carve_caves(cfg, blocks, block_ids, X, Z, H, inside, floor):
     # are local chunk features they often stop after a few blocks and create the
     # bad square dead-end holes seen from the surface. Surface openings now come
     # only from real feature-cell cave systems that continue across chunks.
+    _carve_underground_cave_networks(cfg, blocks, block_ids, X, Z, H, inside,
+                                     floor, target_y, intensity)
+
+
+def _carve_deep_dark_with_regular_caverns(cfg, blocks, block_ids, X, Z, H, inside, floor):
+    # Deep dark uses the same cave-carving primitives as the normal cavern
+    # layer. The only difference is the later palette pass, which swaps the
+    # lower rock to deepslate/tuff/sculk. This avoids the old separate deep-dark
+    # density field that created flat ceilings, bedrock-floor stadiums and a
+    # hard vertical drop from the cavern layer above.
+    intensity = max(0.2, float(cfg.cave_intensity))
+    target_y = max(floor + 8, min(cfg.floor_y - 12, _diamond_target_y(cfg, floor) - 26))
+
+    _carve_legacy_cave_noise(cfg, blocks, block_ids, X, Z, H, inside, floor,
+                             target_y, intensity)
     _carve_underground_cave_networks(cfg, blocks, block_ids, X, Z, H, inside,
                                      floor, target_y, intensity)
 
@@ -1069,10 +1866,10 @@ def _carve_surface_cave_systems(cfg, blocks, block_ids, X, Z, H, inside, floor,
 
         # Avoid turning oceans/lakes into ugly underwater swiss cheese mouths,
         # but still allow some low shore caves.
-        if surf <= cfg.water_level + 1 and _rand01(cell_x, cell_z, cfg.seed, 7004) > 0.28:
+        if surf <= cfg.water_level + 8 and _rand01(cell_x, cell_z, cfg.seed, 7004) > 0.10:
             continue
 
-        start_y = min(surf - 2, cfg.water_level + 52)
+        start_y = min(surf - 4, cfg.water_level + 48)
         start_y = max(target_y + 34, start_y)
         if start_y <= target_y + 10:
             continue
@@ -1093,7 +1890,7 @@ def _carve_surface_cave_systems(cfg, blocks, block_ids, X, Z, H, inside, floor,
             r_noise = _rand_range(cell_x, cell_z, cfg.seed, 7020 + i, 0.70, 1.42)
             r = base_r * r_noise
             if i == 0:
-                r *= 1.82
+                r *= 1.42
             if i % 4 == 2:
                 r *= 1.22
             _carve_varied_segment(block_ids, blocks, X, Z, H, inside, floor,
@@ -1529,14 +2326,17 @@ def _carve_room(block_ids, blocks, X, Z, H, inside, floor, center, rx, ry, rz):
 
 
 def _carve_ravines(cfg, blocks, block_ids, X, Z, H, inside, on_wall,
-                   world_y, floor):
+                   world_y, floor, is_water, is_beach):
     # Old implementation used an infinite noise contour, which can generate a
     # world-spanning laser-cut canyon. This is finite segment carving with
     # tapered ends, sloped walls, and sparse lava only in tiny bottom pools.
-    spacing = 300
+    spacing = 330
     reach = 260
-    chance = 0.11
+    chance = 0.048
     solid = _solid_carve_mask(block_ids, blocks)
+
+    protected_water = is_water | is_beach | (H <= cfg.water_level + 7)
+    water_buffer = _soft_mask(protected_water, passes=5)
 
     for cell_x, cell_z in _iter_feature_cells(X, Z, spacing, reach):
         if _rand01(cell_x, cell_z, cfg.seed, 8001) > chance:
@@ -1546,8 +2346,8 @@ def _carve_ravines(cfg, blocks, block_ids, X, Z, H, inside, on_wall,
         oz = cell_z * spacing + _rand_range(cell_x, cell_z, cfg.seed, 8003, 45.0, spacing - 45.0)
         angle = _rand_range(cell_x, cell_z, cfg.seed, 8004, 0.0, np.pi * 2.0)
         length = _rand_range(cell_x, cell_z, cfg.seed, 8005, 82.0, 185.0)
-        width = _rand_range(cell_x, cell_z, cfg.seed, 8006, 5.0, 10.5)
-        depth = _rand_range(cell_x, cell_z, cfg.seed, 8007, 28.0, 72.0)
+        width = _rand_range(cell_x, cell_z, cfg.seed, 8006, 3.5, 7.0)
+        depth = _rand_range(cell_x, cell_z, cfg.seed, 8007, 18.0, 44.0)
         wiggle = _rand_range(cell_x, cell_z, cfg.seed, 8008, 2.0, 11.0)
         phase = _rand_range(cell_x, cell_z, cfg.seed, 8009, 0.0, np.pi * 2.0)
 
@@ -1566,7 +2366,7 @@ def _carve_ravines(cfg, blocks, block_ids, X, Z, H, inside, on_wall,
         lateral = rx * px + rz * pz - lateral_center
         dist = np.abs(lateral)
         radius = width * (0.18 + 0.82 * np.sqrt(np.clip(taper, 0.0, 1.0)))
-        col = (dist < radius) & inside & ~on_wall & (taper > 0.04)
+        col = (dist < radius) & inside & ~on_wall & (taper > 0.04) & (water_buffer < 0.18)
         if not col.any():
             continue
 
@@ -1610,22 +2410,28 @@ def _settle_liquid_flow(cfg, blocks, block_ids, inside, floor):
     inside3 = inside[None, :, :]
 
     if np.any((block_ids == blocks.water) & inside3):
+        # Surface rivers/ponds can now live at a local per-column water surface
+        # instead of one global sea level. Do not let that water free-fall into
+        # every ravine it touches; it should only settle sideways on nearby solid
+        # floor blocks inside this static region-file pass.
         _settle_one_liquid(block_ids, blocks, inside, blocks.water,
-                           lateral_steps=7,
+                           lateral_steps=2,
                            lo_y=floor + 1,
-                           hi_y=max(cfg.water_level + 4, floor + 8),
-                           can_fall_to_y=floor + 1)
+                           hi_y=MIN_Y + WORLD_HEIGHT - 2,
+                           can_fall_to_y=floor + 1,
+                           allow_fall=False)
 
     if np.any((block_ids == blocks.lava) & inside3):
         _settle_one_liquid(block_ids, blocks, inside, blocks.lava,
                            lateral_steps=3,
                            lo_y=floor + 1,
                            hi_y=floor + 18,
-                           can_fall_to_y=floor + 1)
+                           can_fall_to_y=floor + 1,
+                           allow_fall=True)
 
 
 def _settle_one_liquid(block_ids, blocks, inside, liquid_id, lateral_steps,
-                       lo_y, hi_y, can_fall_to_y):
+                       lo_y, hi_y, can_fall_to_y, allow_fall=True):
     lo = max(0, int(can_fall_to_y) - MIN_Y)
     hi = min(WORLD_HEIGHT - 1, int(hi_y) - MIN_Y)
     spread_lo = max(0, int(lo_y) - MIN_Y)
@@ -1634,9 +2440,12 @@ def _settle_one_liquid(block_ids, blocks, inside, liquid_id, lateral_steps,
         return
 
     for _ in range(max(1, int(lateral_steps))):
-        # First let every liquid column fall straight down through air. This is
-        # what turns a river edge above a cave/ravine into an actual waterfall.
-        _fall_liquid_columns(block_ids, blocks, inside, liquid_id, lo, hi)
+        # First let lava columns fall straight down through air. Surface water is
+        # intentionally not free-fallen here because finite rivers/ponds use
+        # local heights; otherwise one exposed cave edge turns into a giant
+        # vertical water trench.
+        if allow_fall:
+            _fall_liquid_columns(block_ids, blocks, inside, liquid_id, lo, hi)
 
         liquid = block_ids == liquid_id
         below_solid = _below_solid_mask(block_ids, blocks)
@@ -1657,7 +2466,8 @@ def _settle_one_liquid(block_ids, blocks, inside, liquid_id, lateral_steps,
             break
         block_ids[target] = liquid_id
 
-    _fall_liquid_columns(block_ids, blocks, inside, liquid_id, lo, hi)
+    if allow_fall:
+        _fall_liquid_columns(block_ids, blocks, inside, liquid_id, lo, hi)
 
 
 def _fall_liquid_columns(block_ids, blocks, inside, liquid_id, lo, hi):
@@ -1723,6 +2533,61 @@ def _place_blob(block_ids, ox, oy, oz, size, target_id, rng, inside, replace_ids
             if block_ids[y, z, x] in replace_ids:
                 block_ids[y, z, x] = target_id
                 placed += 1
+
+
+def _deep_dark_ore_name(name):
+    short = name.split(":", 1)[-1]
+    if short.startswith("deepslate_") or not short.endswith("_ore"):
+        return name
+    return f"minecraft:deepslate_{short}" if ":" in name else f"deepslate_{short}"
+
+
+def _place_deep_dark_ores(cfg, blocks, block_ids, H, inside, rng):
+    # The deep dark is now the same cave geometry as the regular cavern layer,
+    # only with a deeper material palette. Mirror the normal ore pass into that
+    # lower palette after sculk/deepslate conversion so ores cannot be wiped by
+    # the deep-dark skinning step. This intentionally ignores each ore's vanilla
+    # y-window: the custom deep-dark extension is extra playable space and should
+    # contain the same ore mix the cavern layer above has.
+    deep_lo = MIN_Y + 3
+    deep_hi = min(int(cfg.floor_y + 8), WORLD_HEIGHT + MIN_Y - 2)
+    if deep_hi < deep_lo:
+        return
+
+    replaceable = (blocks.deepslate, blocks.tuff, blocks.cobbled_deepslate,
+                   blocks.stone, blocks.andesite, blocks.diorite, blocks.granite)
+    replaceable_arr = np.array(replaceable, dtype=block_ids.dtype)
+    rock = np.isin(block_ids, replaceable_arr)
+    air = block_ids == blocks.air
+
+    near_air = np.zeros_like(rock, dtype=bool)
+    near_air[1:] |= air[:-1]
+    near_air[:-1] |= air[1:]
+    near_air[:, 1:, :] |= air[:, :-1, :]
+    near_air[:, :-1, :] |= air[:, 1:, :]
+    near_air[:, :, 1:] |= air[:, :, :-1]
+    near_air[:, :, :-1] |= air[:, :, 1:]
+
+    y_world = (np.arange(WORLD_HEIGHT) + MIN_Y)[:, None, None]
+    deep_zone = (y_world >= deep_lo) & (y_world <= deep_hi)
+    inside3 = inside[None, :, :]
+    exposed = rock & near_air & deep_zone & inside3
+    exposed_coords = np.argwhere(exposed)
+
+    for ore in cfg.ores:
+        oid = blocks.ore(_deep_dark_ore_name(ore.name))
+        veins = int(rng.poisson(max(0.0, ore.veins_per_chunk * 0.95)))
+        for _ in range(veins):
+            if exposed_coords.size > 0 and rng.random() < 0.72:
+                iy, oz, ox = exposed_coords[int(rng.integers(0, len(exposed_coords)))]
+                oy = int(iy + MIN_Y)
+            else:
+                ox, oz = int(rng.integers(0, 16)), int(rng.integers(0, 16))
+                if not inside[oz, ox]:
+                    continue
+                oy = _sample_y(rng, deep_lo, deep_hi, ore.bias)
+            _place_blob(block_ids, int(ox), int(oy), int(oz), ore.vein_size, oid, rng, inside,
+                        replaceable)
 
 
 # ---------------------------------------------------------------------------
@@ -2123,6 +2988,7 @@ def _tune_biomes(cfg, xmin, xmax):
     X, Z = np.meshgrid(xs, zs)
     Hf, mnt = _terrain_height_fields(cfg, X, Z)
     temp, hum, selector, edge_wobble = _base_climate_fields(cfg, X, Z, Hf)
+    temp, hum, selector, edge_wobble = _smooth_climate_grid(temp, hum, selector, edge_wobble)
 
     land = Hf > cfg.water_level - 4
     if not land.any():
@@ -2130,8 +2996,8 @@ def _tune_biomes(cfg, xmin, xmax):
     temp_land = temp[land]
     hum_land = hum[land]
 
-    frozen_cut = _quantile_or(temp_land, 0.105, cfg.biome_frozen_cut)
-    cold_cut = _quantile_or(temp_land, 0.305, cfg.biome_cold_cut)
+    frozen_cut = _quantile_or(temp_land, 0.070, cfg.biome_frozen_cut)
+    cold_cut = _quantile_or(temp_land, 0.255, cfg.biome_cold_cut)
     warm_cut = _quantile_or(temp_land, 0.700, cfg.biome_warm_cut)
 
     cfg.biome_frozen_cut = _clamp(frozen_cut, 0.10, 0.36)
@@ -2168,7 +3034,7 @@ def _tune_biomes(cfg, xmin, xmax):
         # Keep snow/desert present but not seed-dominating. The signs here are
         # important: raising frozen_cut makes more snow, raising desert_hum_cut
         # makes more desert, lowering forest_hum_cut makes more forest.
-        cfg.biome_frozen_cut = _clamp(cfg.biome_frozen_cut + (0.120 - snow) * 0.42, 0.06, cfg.biome_cold_cut - 0.08)
+        cfg.biome_frozen_cut = _clamp(cfg.biome_frozen_cut + (0.065 - snow) * 0.42, 0.04, cfg.biome_cold_cut - 0.08)
         cfg.biome_desert_hum_cut = _clamp(cfg.biome_desert_hum_cut + (0.165 - desert) * 0.68, 0.22, 0.70)
         cfg.biome_warm_cut = _clamp(cfg.biome_warm_cut - (0.165 - desert) * 0.34,
                                     cfg.biome_cold_cut + 0.18, 0.88)
@@ -2186,9 +3052,9 @@ def _tune_biomes(cfg, xmin, xmax):
 # ---------------------------------------------------------------------------
 
 def _generate_region_worker(args):
-    (job_index, cfg, xmin, xmax, pscale, preview_size, region_dir,
-     rx, rz, cxmin, cxmax, czmin, czmax, progress_queue, progress_interval,
-     send_preview_progress) = args
+    (job_index, cfg, ow_xmin, ow_xmax, preview_xmin, preview_zmin,
+     preview_w, preview_h, pscale, region_dir, rx, rz, cxmin, cxmax,
+     czmin, czmax, progress_queue, progress_interval, send_preview_progress) = args
 
     blocks, biome_reg = _prepare_palettes(cfg)
     block_palette = blocks.palette()
@@ -2196,7 +3062,10 @@ def _generate_region_worker(args):
     rw = RegionWriter(rx, rz)
 
     patch_x, patch_z, patch_w, patch_h = _preview_patch_rect(
-        cfg, xmin, xmax, pscale, preview_size, cxmin, cxmax, czmin, czmax)
+        preview_xmin, preview_zmin, preview_w, preview_h, pscale,
+        cxmin, cxmax, czmin, czmax)
+    chunk_areas = _chunk_areas(cfg)
+    n_bounds = nether_bounds(cfg) if cfg.nether else None
     preview_patch = np.zeros((patch_h, patch_w, 3), dtype=np.uint8)
 
     chunks = 0
@@ -2204,15 +3073,34 @@ def _generate_region_worker(args):
     pending_patches = []
     for cz in range(czmin, czmax + 1):
         for cx in range(cxmin, cxmax + 1):
+            if not _chunk_in_any_area(cx, cz, chunk_areas):
+                continue
             rng_seed = _chunk_rng_seed(cfg.seed, cx, cz)
-            block_ids, biome_ids, H, biome_str, inside, is_water = generate_chunk(
-                cfg, blocks, biome_reg, cx, cz, xmin, xmax, rng_seed)
+            if n_bounds is not None:
+                nxmin, nxmax, nzmin, nzmax = n_bounds
+                if cx * 16 <= nxmax and cx * 16 + 15 >= nxmin and \
+                        cz * 16 <= nzmax and cz * 16 + 15 >= nzmin:
+                    block_ids, biome_ids, H, biome_str, inside, is_water, block_entities = generate_nether_chunk(
+                        cfg, blocks, biome_reg, cx, cz, n_bounds, rng_seed)
+                else:
+                    block_ids, biome_ids, H, biome_str, inside, is_water, block_entities = generate_chunk(
+                        cfg, blocks, biome_reg, cx, cz, ow_xmin, ow_xmax, rng_seed)
+            else:
+                block_ids, biome_ids, H, biome_str, inside, is_water, block_entities = generate_chunk(
+                    cfg, blocks, biome_reg, cx, cz, ow_xmin, ow_xmax, rng_seed)
 
+            # Some generation passes still register optional block states lazily
+            # (for example custom ore names or rare decorations). Use the current
+            # palette after chunk generation so local block IDs are always backed
+            # by a block-state tag.
+            block_palette = blocks.palette()
             root = build_chunk(cx, cz, block_ids, biome_ids, block_palette,
-                               biome_palette, cfg.data_version, MIN_SECTION, N_SECTIONS)
+                               biome_palette, cfg.data_version, MIN_SECTION, N_SECTIONS,
+                               block_entities=block_entities)
             rw.add_chunk(cx, cz, root)
 
-            chunk_patch = _chunk_preview_patch(cfg, cx, cz, xmin, pscale, preview_size,
+            chunk_patch = _chunk_preview_patch(cfg, cx, cz, preview_xmin, preview_zmin,
+                                               pscale, preview_w, preview_h,
                                                H, biome_str, inside, is_water)
             if chunk_patch is not None:
                 _apply_preview_patch(preview_patch, (chunk_patch[0] - patch_x,
@@ -2253,9 +3141,9 @@ def _generate_region_worker(args):
 
 
 def _generate_tile_worker(args):
-    (job_index, cfg, xmin, xmax, pscale, preview_size,
-     cxmin, cxmax, czmin, czmax, progress_queue, progress_interval,
-     send_preview_progress) = args
+    (job_index, cfg, ow_xmin, ow_xmax, preview_xmin, preview_zmin,
+     preview_w, preview_h, pscale, cxmin, cxmax, czmin, czmax,
+     progress_queue, progress_interval, send_preview_progress) = args
 
     blocks, biome_reg = _prepare_palettes(cfg)
     block_palette = blocks.palette()
@@ -2265,19 +3153,40 @@ def _generate_tile_worker(args):
     preview_patches = []
     pending_patches = []
     chunks = 0
+    chunk_areas = _chunk_areas(cfg)
+    n_bounds = nether_bounds(cfg) if cfg.nether else None
     last_reported_chunks = 0
 
     for cz in range(czmin, czmax + 1):
         for cx in range(cxmin, cxmax + 1):
+            if not _chunk_in_any_area(cx, cz, chunk_areas):
+                continue
             rng_seed = _chunk_rng_seed(cfg.seed, cx, cz)
-            block_ids, biome_ids, H, biome_str, inside, is_water = generate_chunk(
-                cfg, blocks, biome_reg, cx, cz, xmin, xmax, rng_seed)
+            if n_bounds is not None:
+                nxmin, nxmax, nzmin, nzmax = n_bounds
+                if cx * 16 <= nxmax and cx * 16 + 15 >= nxmin and \
+                        cz * 16 <= nzmax and cz * 16 + 15 >= nzmin:
+                    block_ids, biome_ids, H, biome_str, inside, is_water, block_entities = generate_nether_chunk(
+                        cfg, blocks, biome_reg, cx, cz, n_bounds, rng_seed)
+                else:
+                    block_ids, biome_ids, H, biome_str, inside, is_water, block_entities = generate_chunk(
+                        cfg, blocks, biome_reg, cx, cz, ow_xmin, ow_xmax, rng_seed)
+            else:
+                block_ids, biome_ids, H, biome_str, inside, is_water, block_entities = generate_chunk(
+                    cfg, blocks, biome_reg, cx, cz, ow_xmin, ow_xmax, rng_seed)
 
+            # Some generation passes still register optional block states lazily
+            # (for example custom ore names or rare decorations). Use the current
+            # palette after chunk generation so local block IDs are always backed
+            # by a block-state tag.
+            block_palette = blocks.palette()
             root = build_chunk(cx, cz, block_ids, biome_ids, block_palette,
-                               biome_palette, cfg.data_version, MIN_SECTION, N_SECTIONS)
+                               biome_palette, cfg.data_version, MIN_SECTION, N_SECTIONS,
+                               block_entities=block_entities)
             compressed_chunks.append((cx, cz, nbt.to_zlib("", root)))
 
-            chunk_patch = _chunk_preview_patch(cfg, cx, cz, xmin, pscale, preview_size,
+            chunk_patch = _chunk_preview_patch(cfg, cx, cz, preview_xmin, preview_zmin,
+                                               pscale, preview_w, preview_h,
                                                H, biome_str, inside, is_water)
             if chunk_patch is not None:
                 preview_patches.append(chunk_patch)
@@ -2318,38 +3227,49 @@ def generate_world(cfg: WorldConfig, out_dir: str,
         if fn.startswith("r.") and fn.endswith(".mca"):
             os.remove(os.path.join(region_dir, fn))
 
-    xmin = -(cfg.size // 2)
-    xmax = xmin + cfg.size - 1
-    cfg = _tune_biomes(cfg, xmin, xmax)
-    cxmin, cxmax = xmin >> 4, xmax >> 4
-    czmin, czmax = xmin >> 4, xmax >> 4
-    total_chunks = (cxmax - cxmin + 1) * (czmax - czmin + 1)
+    ow_xmin, ow_xmax, ow_zmin, ow_zmax = overworld_bounds(cfg)
+    preview_xmin, preview_xmax, preview_zmin, preview_zmax = generation_bounds(cfg)
+    cfg = _tune_biomes(cfg, ow_xmin, ow_xmax)
 
-    region_jobs = list(_region_jobs(cxmin, cxmax, czmin, czmax))
+    # Plan biome centers + structures up front so the parallel workers can stamp
+    # any structure that overlaps their chunk (structures cross chunk borders).
+    report(0.0, "Mapping biomes & planning structures...")
+    biome_midpoints = compute_biome_midpoints(cfg)
+    layer_info = underworld.layer_starts(cfg)
+    cfg.structure_plan = structures.plan_structures(cfg, biome_midpoints, layer_info)
+
+    total_chunks = sum(1 for _ in _generation_chunks(cfg))
+
+    region_jobs = list(_region_jobs_for_areas(cfg))
     requested_workers = os.cpu_count() or 1 if workers is None or int(workers) <= 0 else int(workers)
     use_tile_jobs = total_chunks >= 256 and len(region_jobs) < requested_workers
-    tile_jobs = list(_tile_jobs(cxmin, cxmax, czmin, czmax)) if use_tile_jobs else []
+    tile_jobs = list(_tile_jobs_for_areas(cfg)) if use_tile_jobs else []
     active_jobs = tile_jobs if use_tile_jobs else region_jobs
     worker_count = _resolve_worker_count(workers, len(region_jobs), total_chunks,
                                          len(active_jobs))
 
-    pscale = max(1, cfg.size // 768)
-    preview_size = (cfg.size + pscale - 1) // pscale
-    preview = np.zeros((preview_size, preview_size, 3), dtype=np.uint8)
+    preview_w_blocks = preview_xmax - preview_xmin + 1
+    preview_h_blocks = preview_zmax - preview_zmin + 1
+    pscale = max(1, max(preview_w_blocks, preview_h_blocks) // 768)
+    preview_w = (preview_w_blocks + pscale - 1) // pscale
+    preview_h = (preview_h_blocks + pscale - 1) // pscale
+    preview = np.zeros((preview_h, preview_w, 3), dtype=np.uint8)
     region_writers = {}
 
     def make_jobs(progress_queue=None, progress_interval=8):
         if use_tile_jobs:
             return [
-                (job_index, cfg, xmin, xmax, pscale, preview_size,
-                 jcxmin, jcxmax, jczmin, jczmax, progress_queue, progress_interval,
+                (job_index, cfg, ow_xmin, ow_xmax, preview_xmin, preview_zmin,
+                 preview_w_blocks, preview_h_blocks, pscale, jcxmin, jcxmax,
+                 jczmin, jczmax, progress_queue, progress_interval,
                  preview_progress is not None)
                 for job_index, (jcxmin, jcxmax, jczmin, jczmax)
                 in enumerate(tile_jobs)
             ]
         return [
-            (job_index, cfg, xmin, xmax, pscale, preview_size, region_dir,
-             rx, rz, jcxmin, jcxmax, jczmin, jczmax, progress_queue, progress_interval,
+            (job_index, cfg, ow_xmin, ow_xmax, preview_xmin, preview_zmin,
+             preview_w_blocks, preview_h_blocks, pscale, region_dir, rx, rz,
+             jcxmin, jcxmax, jczmin, jczmax, progress_queue, progress_interval,
              preview_progress is not None)
             for job_index, (rx, rz, jcxmin, jcxmax, jczmin, jczmax)
             in enumerate(region_jobs)
@@ -2485,9 +3405,86 @@ def generate_world(cfg: WorldConfig, out_dir: str,
     return {
         "chunks": total_chunks, "regions": len(region_jobs), "workers": worker_count,
         "job_mode": "tile" if use_tile_jobs else "region",
-        "spawn": (0, spawn_y, 0), "bounds": (xmin, xmax),
+        "spawn": (0, spawn_y, 0), "bounds": (ow_xmin, ow_xmax),
+        "nether_bounds": nether_bounds(cfg) if cfg.nether else None,
         "seconds": round(time.time() - t0, 1), "preview": preview,
+        "biome_midpoints": biome_midpoints,
+        "structures": cfg.structure_plan or [],
+        "layer_starts": layer_info,
     }
+
+
+def compute_biome_midpoints(cfg, max_cells=96):
+    """Coarse-sample the world and return the midpoint of every contiguous biome
+    region (overworld + nether). Multiple regions of the same biome are listed
+    separately. Returns [{'biome', 'x', 'y', 'z', 'blocks'}]."""
+    blocks, _ = _prepare_palettes(cfg)
+    xmin = -(cfg.size // 2)
+    xmax = xmin + cfg.size - 1
+    n = int(min(max_cells, max(8, cfg.size // 16)))
+    xs = np.linspace(xmin + 0.5, xmax - 0.5, n)
+    zs = np.linspace(xmin + 0.5, xmax - 0.5, n)
+    X, Z = np.meshgrid(xs, zs)                      # [z, x]
+    step = (xmax - xmin) / max(1, n - 1)
+    cell_area = step * step
+    min_cells = 3
+
+    out = []
+    f = _fields(cfg, blocks, X, Z)
+    out += _region_centroids(f["biome"], X, Z, f["H"], step, cell_area, min_cells)
+
+    if cfg.nether:
+        nxmin, nxmax, nzmin, nzmax = nether_bounds(cfg)
+        n2 = int(min(max_cells, max(8, NETHER_BOX_SIZE // 16)))
+        xs2 = np.linspace(nxmin + 0.5, nxmax - 0.5, n2)
+        zs2 = np.linspace(nzmin + 0.5, nzmax - 0.5, n2)
+        X2, Z2 = np.meshgrid(xs2, zs2)
+        step2 = (nxmax - nxmin) / max(1, n2 - 1)
+        cell_area2 = step2 * step2
+        nbm = underworld.nether_biome_map(cfg, X2, Z2)
+        names = np.array(underworld.NETHER_BIOMES)
+        neth_names = names[nbm]
+        Hn = np.full(X2.shape, (MIN_Y + NETHER_BOX_CEILING_Y) // 2)
+        out += _region_centroids(neth_names, X2, Z2, Hn, step2, cell_area2, min_cells)
+
+    return out
+
+
+def _region_centroids(biome, X, Z, H, step, cell_area, min_cells):
+    """Flood-fill contiguous equal-biome cells; emit one midpoint per region."""
+    n_z, n_x = biome.shape
+    seen = np.zeros((n_z, n_x), dtype=bool)
+    results = []
+    for z0 in range(n_z):
+        for x0 in range(n_x):
+            if seen[z0, x0]:
+                continue
+            target = biome[z0, x0]
+            stack = [(z0, x0)]
+            seen[z0, x0] = True
+            cells = []
+            while stack:
+                z, x = stack.pop()
+                cells.append((z, x))
+                for dz, dx in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                    nz, nx = z + dz, x + dx
+                    if 0 <= nz < n_z and 0 <= nx < n_x and not seen[nz, nx] \
+                            and biome[nz, nx] == target:
+                        seen[nz, nx] = True
+                        stack.append((nz, nx))
+            if len(cells) < min_cells:
+                continue
+            czs = [c[0] for c in cells]
+            cxs = [c[1] for c in cells]
+            mx = int(round(float(np.mean([X[z, x] for z, x in cells]))))
+            mz = int(round(float(np.mean([Z[z, x] for z, x in cells]))))
+            my = int(round(float(np.mean([H[z, x] for z, x in cells]))))
+            results.append({
+                "biome": str(target),
+                "x": mx, "y": my, "z": mz,
+                "blocks": int(round(len(cells) * cell_area)),
+            })
+    return results
 
 
 def _write_region_result(region_dir, result):
@@ -2526,24 +3523,28 @@ def _map_preview_color(cfg, H, biome_str, is_water, iz, ix):
     return (_clamp_u8(base[0] * f), _clamp_u8(base[1] * f), _clamp_u8(base[2] * f))
 
 
-def _chunk_preview_patch(cfg, cx, cz, xmin, pscale, preview_size, H, biome_str, inside, is_water):
-    px0 = preview_size
-    pz0 = preview_size
+def _chunk_preview_patch(cfg, cx, cz, preview_xmin, preview_zmin, pscale,
+                         preview_w_blocks, preview_h_blocks, H, biome_str,
+                         inside, is_water):
+    preview_w = (preview_w_blocks + pscale - 1) // pscale
+    preview_h = (preview_h_blocks + pscale - 1) // pscale
+    px0 = preview_w
+    pz0 = preview_h
     px1 = -1
     pz1 = -1
     points = []
 
     for iz in range(16):
         wz = cz * 16 + iz
-        pz = (wz - xmin) // pscale
-        if pz < 0 or pz >= preview_size:
+        pz = (wz - preview_zmin) // pscale
+        if pz < 0 or pz >= preview_h:
             continue
         for ix in range(16):
             if not inside[iz, ix]:
                 continue
             wx = cx * 16 + ix
-            px = (wx - xmin) // pscale
-            if px < 0 or px >= preview_size:
+            px = (wx - preview_xmin) // pscale
+            if px < 0 or px >= preview_w:
                 continue
             col = _map_preview_color(cfg, H, biome_str, is_water, iz, ix)
             points.append((px, pz, col))
@@ -2574,10 +3575,11 @@ def _apply_preview_patch(preview, patch_info):
     sub[mask] = patch[mask]
 
 
-def _fill_preview_patch(preview, cfg, cx, cz, xmin, pscale, patch_x, patch_z,
-                        H, biome_str, inside, is_water):
-    patch_info = _chunk_preview_patch(cfg, cx, cz, xmin, pscale,
-                                      preview.shape[0] + max(patch_x, patch_z),
+def _fill_preview_patch(preview, cfg, cx, cz, preview_xmin, preview_zmin,
+                        pscale, patch_x, patch_z, H, biome_str, inside, is_water):
+    patch_info = _chunk_preview_patch(cfg, cx, cz, preview_xmin, preview_zmin,
+                                      pscale, preview.shape[1] * pscale,
+                                      preview.shape[0] * pscale,
                                       H, biome_str, inside, is_water)
     if patch_info is None:
         return
@@ -2586,7 +3588,10 @@ def _fill_preview_patch(preview, cfg, cx, cz, xmin, pscale, patch_x, patch_z,
     _apply_preview_patch(preview, local_info)
 
 
-def _fill_preview(preview, cfg, cx, cz, xmin, pscale, H, biome_str, inside, is_water):
-    patch_info = _chunk_preview_patch(cfg, cx, cz, xmin, pscale, preview.shape[0],
+def _fill_preview(preview, cfg, cx, cz, preview_xmin, preview_zmin, pscale,
+                  H, biome_str, inside, is_water):
+    patch_info = _chunk_preview_patch(cfg, cx, cz, preview_xmin, preview_zmin,
+                                      pscale, preview.shape[1] * pscale,
+                                      preview.shape[0] * pscale,
                                       H, biome_str, inside, is_water)
     _apply_preview_patch(preview, patch_info)

@@ -58,8 +58,9 @@ python cli.py --help      # all options
 
 ## What you can control
 
-- **Boundaries** — square world, any size (default **1000×1000**), always
-  centered on `0,0` and growing outward evenly.
+- **Boundaries** — square overworld, any size (default **1000×1000**), always
+  centered on `0,0` and growing outward evenly. Optional Nether generation adds
+  a separate **1000×1000** bedrock box 500 blocks to the right.
 - **Vertical shape** — bedrock **floor Y** (default **−20**, void below it),
   water level, and base land height.
 - **Bedrock border wall** — encases the whole border. By default it runs from the
@@ -145,9 +146,9 @@ format:
 
 - `noise.py` — seeded, vectorized value noise (no external noise lib).
 - `generator.py` — terrain height, biome/climate assignment, cave carving, ore
-  veins, trees, snow, the bedrock floor, the border wall, region-level
-  multiprocessing, and tiled jobs for small worlds or manually high worker
-  counts.
+  veins, trees, snow, the bedrock floor, the border wall, optional separate
+  Nether box, region-level multiprocessing, and tiled jobs for small worlds or
+  manually high worker counts.
 - `region.py` — assembles 1.18+ chunk NBT (palette-based `block_states` /
   `biomes`, negative-Y sections) and packs region files.
 - `nbt.py` — a small NBT binary writer.
@@ -178,5 +179,7 @@ Terrain uses the plain `stone` / `diamond_ore` palette everywhere (even below
 - Lighting and heightmaps are recomputed by Minecraft on first load, so the very
   first time you open the world near the edges it may relight briefly.
 - Trees are clipped at chunk borders in rare cases (cosmetic).
-- The Nether and End are left to vanilla defaults (only the Overworld is forged).
+- The End is left to vanilla defaults. When enabled, the Nether content is forged
+  into the separate overworld-region box rather than generated as a datapack or a
+  vertical layer.
 - Requires Python 3.9+.

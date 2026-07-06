@@ -27,12 +27,12 @@ def main():
     ap.add_argument("--version", default="1.20.1", choices=list(VERSIONS))
 
     ap.add_argument("--floor-y", type=int, default=-20)
-    ap.add_argument("--water-level", type=int, default=62)
-    ap.add_argument("--base-height", type=int, default=71)
-    ap.add_argument("--mountain-amount", type=float, default=0.5)
-    ap.add_argument("--mountain-amp", type=float, default=70)
-    ap.add_argument("--hill-amp", type=float, default=12)
-    ap.add_argument("--snowline-y", type=int, default=95)
+    ap.add_argument("--water-level", type=int, default=118)
+    ap.add_argument("--base-height", type=int, default=128)
+    ap.add_argument("--mountain-amount", type=float, default=0.30)
+    ap.add_argument("--mountain-amp", type=float, default=74)
+    ap.add_argument("--hill-amp", type=float, default=11)
+    ap.add_argument("--snowline-y", type=int, default=246)
 
     ap.add_argument("--no-caves", action="store_true")
     ap.add_argument("--cave-intensity", type=float, default=1.0)
@@ -51,6 +51,12 @@ def main():
     ap.add_argument("--wall-min-y", type=int, default=-64)
     ap.add_argument("--wall-max-y", type=int, default=319)
     ap.add_argument("--creative", action="store_true")
+    ap.add_argument("--deep-dark", action="store_true",
+                    help="fill the space below the overworld floor with deep dark caverns")
+    ap.add_argument("--nether", action="store_true",
+                    help="generate a separate 1000x1000 Nether bedrock box to the right")
+    ap.add_argument("--structures", action="store_true",
+                    help="scatter overworld, deep dark, and Nether-box structures")
     ap.add_argument("--workers", type=int, default=None,
                     help="generation worker processes. Default auto-detects CPU threads; 1 forces serial generation.")
 
@@ -83,6 +89,7 @@ def main():
         wall=not args.no_wall, wall_min_y=args.wall_min_y,
         wall_max_y=args.wall_max_y,
         game_type=1 if args.creative else 0,
+        deep_dark=args.deep_dark, nether=args.nether, structures=args.structures,
         ores=ores,
     )
 
