@@ -352,6 +352,7 @@ class WorldConfig:
     river_amount: float = 0.4          # 0..1
     lakes: bool = True
     lake_amount: float = 0.4           # 0..1
+    surface_lava_pools: bool = True    # rare small surface lava pools
 
     # Internal, auto-tuned per generated world so one seed does not become
     # 70% forest/plains or 50% snow. These are filled by _tune_biomes().
@@ -757,8 +758,8 @@ def _finite_river_field(cfg, X, Z, mountain_mask, temp=None, hum=None):
     # the same for surface rivers: short finite paths, each with one flat water
     # surface, and terrain is only allowed to bend a few blocks toward it.
     amount = np.clip(cfg.river_amount, 0.0, 1.0)
-    spacing = int(round(330.0 - amount * 64.0))
-    reach = 128
+    spacing = int(round(245.0 - amount * 55.0))
+    reach = 118
     core = np.zeros(X.shape, dtype=np.float64)
     valley = np.zeros(X.shape, dtype=np.float64)
     level = np.full(X.shape, int(cfg.water_level), dtype=np.int32)
@@ -775,23 +776,23 @@ def _finite_river_field(cfg, X, Z, mountain_mask, temp=None, hum=None):
 
     for cell_z in range(cz0, cz1 + 1):
         for cell_x in range(cx0, cx1 + 1):
-            active = 0.13 + amount * 0.22
+            active = 0.28 + amount * 0.28
             if _rand01(cell_x, cell_z, cfg.seed, 5160) > active:
                 continue
 
             nodes = _build_river_nodes(cfg, cell_x, cell_z, spacing)
             sx, sz = nodes[0]
             sy = _surface_height_at(cfg, None, sx, sz)
-            body_level = int(round(sy - _rand_range(cell_x, cell_z, cfg.seed, 5161, 0.7, 1.4)))
+            body_level = int(round(sy - _rand_range(cell_x, cell_z, cfg.seed, 5161, 0.15, 0.85)))
             body_level = int(np.clip(body_level, cfg.floor_y + 8, MIN_Y + WORLD_HEIGHT - 42))
-            width_base = _rand_range(cell_x, cell_z, cfg.seed, 5162, 4.2, 6.6) * (0.86 + amount * 0.26)
+            width_base = _rand_range(cell_x, cell_z, cfg.seed, 5162, 4.8, 7.4) * (0.88 + amount * 0.24)
 
             for i in range(len(nodes) - 1):
                 ax, az = nodes[i]
                 bx, bz = nodes[i + 1]
                 d = _segment_distance_field(X, Z, ax, az, bx, bz)
                 width = width_base * _rand_range(cell_x, cell_z, cfg.seed, 5170 + i, 0.82, 1.22)
-                bank = width + _rand_range(cell_x, cell_z, cfg.seed, 5180 + i, 11.0, 18.0)
+                bank = width + _rand_range(cell_x, cell_z, cfg.seed, 5180 + i, 13.0, 22.0)
                 c = _smoothstep01((width - d) / max(width, 0.001))
                 v = _smoothstep01((bank - d) / max(bank, 0.001))
                 wobble = 0.82 + 0.36 * noise.fbm2d(X + cell_x * 31 + i * 17, Z - cell_z * 29 - i * 19,
@@ -805,17 +806,17 @@ def _finite_river_field(cfg, X, Z, mountain_mask, temp=None, hum=None):
                 valley = np.maximum(valley, v)
 
     if temp is not None:
-        cold_suppression = np.where(temp < cfg.biome_frozen_cut + 0.02, 0.22, 1.0)
+        cold_suppression = np.where(temp < cfg.biome_frozen_cut + 0.02, 0.40, 1.0)
         core *= cold_suppression
-        valley *= np.maximum(cold_suppression, 0.64)
+        valley *= np.maximum(cold_suppression, 0.70)
     if hum is not None:
         dry_suppression = np.where(hum < 0.18, 0.70, 1.0)
         core *= dry_suppression
         valley *= np.maximum(dry_suppression, 0.80)
 
-    mountain = mountain_mask > 0.56
-    core[mountain] *= 0.16
-    valley[mountain] *= 0.36
+    mountain = mountain_mask > 0.64
+    core[mountain] *= 0.24
+    valley[mountain] *= 0.46
     return np.clip(core, 0.0, 1.0), np.clip(valley, 0.0, 1.0), level.astype(np.int32)
 
 
@@ -882,6 +883,69 @@ def _finite_lake_field(cfg, X, Z, mountain_mask, temp=None, hum=None):
     bank[high] *= 0.38
     return np.clip(core, 0.0, 1.0), np.clip(bank, 0.0, 1.0), level.astype(np.int32)
 
+
+def _surface_lava_pool_field(cfg, X, Z, mountain_mask, temp=None, hum=None):
+    if not getattr(cfg, "surface_lava_pools", True) or not getattr(cfg, "fluids", True):
+        zeros = np.zeros(X.shape, dtype=np.float64)
+        return zeros, zeros, np.full(X.shape, int(cfg.water_level), dtype=np.int32)
+
+    spacing = 285
+    reach = 44
+    core = np.zeros(X.shape, dtype=np.float64)
+    bank = np.zeros(X.shape, dtype=np.float64)
+    level = np.full(X.shape, int(cfg.water_level), dtype=np.int32)
+    level_strength = np.zeros(X.shape, dtype=np.float64)
+
+    min_x = int(np.floor(float(X.min())))
+    max_x = int(np.ceil(float(X.max())))
+    min_z = int(np.floor(float(Z.min())))
+    max_z = int(np.ceil(float(Z.max())))
+    cx0 = (min_x - reach) // spacing - 1
+    cx1 = (max_x + reach) // spacing + 1
+    cz0 = (min_z - reach) // spacing - 1
+    cz1 = (max_z + reach) // spacing + 1
+
+    for cell_z in range(cz0, cz1 + 1):
+        for cell_x in range(cx0, cx1 + 1):
+            if _rand01(cell_x, cell_z, cfg.seed, 5440) > 0.155:
+                continue
+            ox = cell_x * spacing + _rand_range(cell_x, cell_z, cfg.seed, 5441, 28.0, spacing - 28.0)
+            oz = cell_z * spacing + _rand_range(cell_x, cell_z, cfg.seed, 5442, 28.0, spacing - 28.0)
+            sy = _surface_height_at(cfg, None, ox, oz)
+            body_level = int(round(sy - _rand_range(cell_x, cell_z, cfg.seed, 5443, 0.20, 0.70)))
+            body_level = int(np.clip(body_level, cfg.floor_y + 10, MIN_Y + WORLD_HEIGHT - 50))
+            rx = _rand_range(cell_x, cell_z, cfg.seed, 5444, 3.5, 6.5)
+            rz = _rand_range(cell_x, cell_z, cfg.seed, 5445, 3.5, 6.5)
+            ang = _rand_range(cell_x, cell_z, cfg.seed, 5446, 0.0, np.pi * 2.0)
+            ca = np.cos(ang)
+            sa = np.sin(ang)
+            dx = X - ox
+            dz = Z - oz
+            lx = dx * ca + dz * sa
+            lz = -dx * sa + dz * ca
+            d = np.sqrt((lx / max(1.0, rx)) ** 2 + (lz / max(1.0, rz)) ** 2)
+            c = _smoothstep01((1.0 - d) / 0.24)
+            b = _smoothstep01((1.55 - d) / 0.55)
+            stronger = c > level_strength
+            level = np.where(stronger, body_level, level)
+            level_strength = np.maximum(level_strength, c)
+            core = np.maximum(core, c)
+            bank = np.maximum(bank, b)
+
+    if temp is not None:
+        warm_bias = np.where(temp >= cfg.biome_warm_cut - 0.04, 1.0, 0.52)
+        core *= warm_bias
+        bank *= np.maximum(warm_bias, 0.62)
+    if hum is not None:
+        wet_suppression = np.where(hum > 0.72, 0.50, 1.0)
+        core *= wet_suppression
+        bank *= np.maximum(wet_suppression, 0.56)
+    high = mountain_mask > 0.62
+    core[high] *= 0.70
+    bank[high] *= 0.82
+    return np.clip(core, 0.0, 1.0), np.clip(bank, 0.0, 1.0), level.astype(np.int32)
+
+
 def _coord_grids(cx, cz):
     xs = cx * 16 + np.arange(16)
     zs = cz * 16 + np.arange(16)
@@ -917,9 +981,15 @@ def _raw_terrain_height_fields(cfg, X, Z):
     range_ridge = _smoothstep01((range_ridge - 0.25) / 0.66) ** 1.48
     extreme = range_gate * range_ridge
 
+    peak_noise = noise.fbm2d(X + 11200, Z - 8800, s + 18, octaves=4, freq=1 / 540.0)
+    peak_gate = _smoothstep01((peak_noise - 0.655) / 0.245)
+    peak_ridge = 1.0 - np.abs(noise.fbm2d(X - 14400, Z + 5300, s + 19, octaves=4, freq=1 / 190.0) - 0.5) * 2.0
+    peak_ridge = _smoothstep01((peak_ridge - 0.22) / 0.60) ** 1.34
+    alpine_peak = peak_gate * peak_ridge * (0.45 + 0.55 * province_gate)
+
     mnt_rough = (noise.fbm2d(X + 4100, Z - 2700, s + 21, octaves=3, freq=1 / 92.0) - 0.5) * 2.0
     mnt_medium = (noise.fbm2d(X - 6200, Z + 1500, s + 22, octaves=3, freq=1 / 150.0) - 0.5) * 2.0
-    mnt_shape = _smoothstep01(np.maximum(mnt, extreme * 0.78))
+    mnt_shape = _smoothstep01(np.maximum.reduce((mnt, extreme * 0.78, alpine_peak * 0.88)))
 
     Hf = (cfg.base_height
           + hills * cfg.hill_amp * 0.72
@@ -927,6 +997,7 @@ def _raw_terrain_height_fields(cfg, X, Z):
           + mnt * cfg.mountain_amp * 0.64
           + (mnt ** 1.18) * ridge * cfg.mountain_amp * 0.28
           + extreme * cfg.mountain_amp * 0.64
+          + alpine_peak * cfg.mountain_amp * 1.70
           + mnt_shape * (mnt_medium * cfg.mountain_amp * 0.090
                          + mnt_rough * cfg.mountain_amp * 0.052))
     return Hf, mnt_shape
@@ -1123,7 +1194,7 @@ def _fields_core(cfg, blocks, X, Z, smooth_heights):
     cold_lumps = (noise.fbm2d(X + 5100, Z - 5100, s + 74, octaves=3, freq=1 / 150.0) - 0.5) * 2.0
     cold_ridges = 1.0 - np.abs(noise.fbm2d(X - 9700, Z + 9700, s + 75, octaves=3, freq=1 / 220.0) - 0.5) * 2.0
     cold_ridges = _smoothstep01((cold_ridges - 0.24) / 0.66)
-    Hf += cold_relief * (cold_lumps * cfg.hill_amp * 0.34 + cold_ridges * cfg.mountain_amp * 0.12 * (0.35 + 0.65 * mnt))
+    Hf += cold_relief * (cold_lumps * cfg.hill_amp * 0.38 + cold_ridges * cfg.mountain_amp * 0.20 * (0.30 + 0.70 * mnt))
 
     if smooth_heights:
         lowland_flat = 1.0 - _smoothstep01((mnt - 0.14) / 0.24)
@@ -1136,6 +1207,7 @@ def _fields_core(cfg, blocks, X, Z, smooth_heights):
     # --- finite rivers + small lakes -----------------------------------
     river_core, river_valley, river_level = _finite_river_field(cfg, X, Z, mnt, temp_band, hum_band)
     lake_core, lake_bank, lake_level = _finite_lake_field(cfg, X, Z, mnt, temp_band, hum_band)
+    lava_core, lava_bank, lava_level = _surface_lava_pool_field(cfg, X, Z, mnt, temp_band, hum_band)
 
     # Rivers and ponds use flat local water planes. The important distinction is
     # that the water level is decided by the feature body first, then nearby
@@ -1149,50 +1221,72 @@ def _fields_core(cfg, blocks, X, Z, smooth_heights):
     feature_surface_f = feature_level.astype(np.float64)
     cut_to_surface = pre_water_hf - feature_surface_f
 
-    mountain_water_gate = 1.0 - _smoothstep01((mnt - 0.26) / 0.18)
-    slope_water_gate = 1.0 - _smoothstep01((local_slope - 3.8) / 4.8)
-    shallow_gate = _smoothstep01((cut_to_surface - 0.05) / 0.55) * (1.0 - _smoothstep01((cut_to_surface - 2.85) / 1.25))
+    mountain_water_gate = 1.0 - _smoothstep01((mnt - 0.30) / 0.22)
+    slope_water_gate = 1.0 - _smoothstep01((local_slope - 4.6) / 5.8)
+    shallow_gate = _smoothstep01((cut_to_surface + 0.10) / 0.45) * (1.0 - _smoothstep01((cut_to_surface - 2.20) / 0.90))
     water_gate = np.clip(mountain_water_gate * slope_water_gate * shallow_gate, 0.0, 1.0)
 
     river_core = river_core * water_gate
-    river_valley = river_valley * (0.18 + 0.82 * water_gate)
+    river_valley = river_valley * (0.16 + 0.84 * water_gate)
     lake_core = lake_core * water_gate
     lake_bank = lake_bank * (0.18 + 0.82 * water_gate)
 
-    river_water = river_core > 0.245
-    lake_water = lake_core > 0.335
+    river_water = river_core > 0.185
+    lake_water = lake_core > 0.315
     water_feature = river_water | lake_water
 
-    bank_strength = np.clip(river_valley * 1.10 + lake_bank * 1.05, 0.0, 1.0)
-    bank_noise = (noise.fbm2d(X + 330, Z - 660, s + 73, octaves=2, freq=1 / 42.0) - 0.5) * 0.32
-    bank_target = feature_surface_f + 0.70 + bank_noise
-    bank_delta = np.maximum(0.0, pre_water_hf - bank_target)
-    bank_cut = np.minimum(bank_delta, 3.2) * bank_strength * 0.82
+    bank_strength = np.clip(river_valley * 1.18 + lake_bank * 1.08, 0.0, 1.0)
+    bank_noise = (noise.fbm2d(X + 330, Z - 660, s + 73, octaves=2, freq=1 / 44.0) - 0.5) * 0.18
+
+    floodplain = bank_strength * (1.0 - _smoothstep01((np.abs(pre_water_hf - feature_surface_f) - 3.6) / 3.0))
+    floodplain = np.clip(floodplain, 0.0, 1.0)
+    floodplain_target = feature_surface_f + 0.14 + bank_noise
+    Hf = Hf * (1.0 - floodplain * 0.46) + floodplain_target * (floodplain * 0.46)
+
+    bank_target = feature_surface_f + 0.22 + bank_noise
+    bank_delta = np.maximum(0.0, Hf - bank_target)
+    bank_cut = np.minimum(bank_delta, 1.85) * bank_strength * 0.64
     Hf = Hf - bank_cut
 
-    terrace = bank_strength * (1.0 - _smoothstep01((np.abs(pre_water_hf - feature_surface_f) - 4.0) / 3.0))
-    terrace_target = feature_surface_f + 1.15 + bank_noise * 0.35
-    Hf = Hf * (1.0 - terrace * 0.22) + terrace_target * (terrace * 0.22)
-
-    river_depth = 0.95 + 0.70 * np.clip(river_core, 0.0, 1.0)
-    lake_depth = 1.05 + 0.95 * np.clip(lake_core, 0.0, 1.0)
+    river_depth = 0.82 + 0.42 * np.clip(river_core, 0.0, 1.0)
+    lake_depth = 0.90 + 0.58 * np.clip(lake_core, 0.0, 1.0)
     wanted_bed = np.where(lake_core > river_core,
                           feature_surface_f - lake_depth,
                           feature_surface_f - river_depth)
-    max_cut = 2.15 + 0.55 * np.clip(lake_core, 0.0, 1.0)
+    max_cut = 1.72 + 0.32 * np.clip(lake_core, 0.0, 1.0)
     bed = np.maximum(wanted_bed, pre_water_hf - max_cut)
     bed = np.minimum(bed, feature_surface_f - 1.0)
     Hf = np.where(water_feature, np.minimum(Hf, bed), Hf)
 
+    # Rare hot surface lava pools use the same local-plane system as water, but
+    # they are smaller and cannot overlap river/lake floodplains.
+    lava_surface_f = lava_level.astype(np.float64)
+    lava_cut = Hf - lava_surface_f
+    lava_gate = (1.0 - np.clip(bank_strength * 1.55, 0.0, 1.0))
+    lava_gate *= 1.0 - _smoothstep01((np.abs(Hf - lava_surface_f) - 2.4) / 1.2)
+    lava_core = lava_core * np.clip(lava_gate, 0.0, 1.0)
+    lava_bank = lava_bank * np.clip(lava_gate, 0.0, 1.0)
+    lava_pool = lava_core > 0.425
+    lava_bank_strength = np.clip(lava_bank, 0.0, 1.0)
+    lava_target = lava_surface_f + 0.08
+    Hf = Hf * (1.0 - lava_bank_strength * 0.32) + lava_target * (lava_bank_strength * 0.32)
+    lava_bed = np.minimum(lava_surface_f - 1.0, Hf - np.clip(lava_cut, 0.0, 1.35))
+    lava_bed = np.minimum(lava_bed, lava_surface_f - 1.0)
+    Hf = np.where(lava_pool, np.minimum(Hf, lava_bed), Hf)
+
     H = np.rint(np.clip(Hf, cfg.floor_y + 3, MIN_Y + WORLD_HEIGHT - 40)).astype(np.int32)
+    H = np.where(water_feature, np.minimum(H, feature_level - 1), H)
+    H = np.where(lava_pool, np.minimum(H, lava_level - 1), H)
 
     # Natural sea-level water can still exist in low basins. Finite rivers and
     # ponds use their own local water surface and are not pulled down to wl.
     sea_water = H <= wl - 1
-    is_water = sea_water | water_feature
+    is_lava = lava_pool & ~water_feature & ~sea_water
+    is_water = (sea_water | water_feature) & ~is_lava
     water_surface = np.full(X.shape, int(wl), dtype=np.int32)
     water_surface = np.where(water_feature, feature_level, water_surface).astype(np.int32)
     water_surface = np.where(is_water, np.maximum(water_surface, H + 1), H).astype(np.int32)
+    lava_surface = np.where(is_lava, np.maximum(lava_level, H + 1), H).astype(np.int32)
     is_river = river_water & is_water
     biome[is_river] = "minecraft:river"
 
@@ -1201,7 +1295,7 @@ def _fields_core(cfg, blocks, X, Z, smooth_heights):
     # banks that actually border water.
     local_shore = (river_valley > 0.110) | (lake_bank > 0.135)
     sea_shore = (H <= wl + 1) & (H >= wl - 2)
-    is_beach = (~is_water) & (sea_shore | local_shore)
+    is_beach = (~is_water) & (~is_lava) & (sea_shore | local_shore)
     biome[is_beach & (biome != "minecraft:snowy_plains") &
           (biome != "minecraft:snowy_taiga") & (biome != "minecraft:snowy_slopes")] = "minecraft:beach"
 
@@ -1230,7 +1324,7 @@ def _fields_core(cfg, blocks, X, Z, smooth_heights):
     return {
         "H": H, "biome": biome, "top": top, "sub": sub,
         "is_water": is_water, "is_river": is_river, "is_beach": is_beach,
-        "water_surface": water_surface,
+        "water_surface": water_surface, "is_lava": is_lava, "lava_surface": lava_surface,
         "is_desert": is_desert, "is_badlands": is_badlands,
         "is_snowy": is_snowy, "mnt": mnt,
         "badlands_strength": badlands_strength,
@@ -1311,6 +1405,7 @@ def generate_chunk(cfg, blocks, biome_reg, cx, cz, xmin, xmax, rng_seed):
     H = f["H"]; biome_str = f["biome"]; top = f["top"]; sub = f["sub"]
     is_water = f["is_water"]; is_river = f["is_river"]; is_beach = f["is_beach"]
     water_surface = f["water_surface"]
+    is_lava = f["is_lava"]; lava_surface = f["lava_surface"]
     is_desert = f["is_desert"]; is_badlands = f["is_badlands"]; is_snowy = f["is_snowy"]
 
     block_ids = np.zeros((WORLD_HEIGHT, 16, 16), dtype=np.int16)  # [y, z, x]
@@ -1355,14 +1450,14 @@ def generate_chunk(cfg, blocks, biome_reg, cx, cz, xmin, xmax, rng_seed):
         _carve_caves(cfg, blocks, block_ids, X, Z, H, inside, floor)
     if cfg.ravines:
         _carve_ravines(cfg, blocks, block_ids, X, Z, H, inside, on_wall,
-                       world_y, floor, is_water, is_beach)
+                       world_y, floor, is_water | is_lava, is_beach)
 
     if is_water.any():
         _seal_water_beds(cfg, blocks, block_ids, H, is_water, is_river, inside,
                          on_wall, floor)
 
     # --- surface top block (land) --------------------------------------
-    land = inside & ~on_wall & ~is_water & (H > floor + 3)
+    land = inside & ~on_wall & ~is_water & ~is_lava & (H > floor + 3)
     arr_surf = (H - MIN_Y)
     fx, fz, fy = xx[land], zz[land], arr_surf[land]
     # only set if the cave/ravine didn't open the surface to sky
@@ -1390,6 +1485,16 @@ def generate_chunk(cfg, blocks, biome_reg, cx, cz, xmin, xmax, rng_seed):
         water_top = water_surface[None, :, :]
         water_fill = inside3 & is_water[None, :, :] & (world_y > Hs) & (world_y <= water_top)
         block_ids[water_fill & (block_ids == 0)] = blocks.water
+
+    if is_lava.any():
+        lcol = inside & ~on_wall & is_lava
+        ly, lz, lx = arr_surf[lcol], zz[lcol], xx[lcol]
+        lava_bed_noise = noise.fbm2d(X + 910, Z - 910, cfg.seed + 76, octaves=2, freq=1 / 9.0)
+        lava_bed = np.where(lava_bed_noise > 0.58, blocks.magma, blocks.stone).astype(np.int16)
+        block_ids[ly, lz, lx] = lava_bed[lcol]
+        lava_top = lava_surface[None, :, :]
+        lava_fill = inside3 & is_lava[None, :, :] & (world_y > Hs) & (world_y <= lava_top)
+        block_ids[lava_fill & (block_ids == 0)] = blocks.lava
 
     # --- underground fluids + static liquid settling -------------------
     if cfg.fluids:
@@ -1424,17 +1529,17 @@ def generate_chunk(cfg, blocks, biome_reg, cx, cz, xmin, xmax, rng_seed):
 
     # --- trees ----------------------------------------------------------
     if cfg.trees:
-        _place_trees(cfg, blocks, block_ids, H, biome_str, is_water, inside,
+        _place_trees(cfg, blocks, block_ids, H, biome_str, is_water | is_lava, inside,
                      on_wall, rng)
 
     # --- surface decoration (grass, flowers, sugar cane, cactus) -------
     if cfg.decorations:
-        _decorate(cfg, blocks, block_ids, H, biome_str, is_water,
+        _decorate(cfg, blocks, block_ids, H, biome_str, is_water | is_lava,
                   is_desert | is_badlands, is_snowy, inside, on_wall, rng)
 
     # --- snow layer -----------------------------------------------------
     if is_snowy.any():
-        cols = inside & ~on_wall & is_snowy & ~is_water & (H > floor + 3)
+        cols = inside & ~on_wall & is_snowy & ~is_water & ~is_lava & (H > floor + 3)
         sy = (H - MIN_Y) + 1
         valid = cols & (sy < WORLD_HEIGHT)
         syy, szz, sxx = sy[valid], zz[valid], xx[valid]
