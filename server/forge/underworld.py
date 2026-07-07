@@ -19,7 +19,7 @@ exposed netherrack (nylium, soul sand, basalt, ...) and scatter features.
 """
 import numpy as np
 
-import noise
+from . import noise
 
 MIN_Y = -64
 

@@ -25,11 +25,11 @@ import numpy as np
 from dataclasses import dataclass, field
 from typing import List, Dict, Callable, Optional
 
-import nbt
-import noise
-import underworld
-import structures
-from region import RegionWriter, build_chunk
+from . import nbt
+from . import noise
+from . import underworld
+from . import structures
+from .region import RegionWriter, build_chunk
 
 # Fixed vertical layout (standard overworld dimension range).
 MIN_Y = -64
@@ -316,13 +316,14 @@ class OreCfg:
 def _default_ores():
     # Grounded in 1.20 vanilla y-levels, adapted to this shallow world.
     return [
-        OreCfg("coal_ore", -64, 319, 11.0, 12, "high"),
-        OreCfg("iron_ore", -64, 319, 9.0, 8, "mid"),
-        OreCfg("copper_ore", 0, 96, 6.0, 8, "mid"),
-        OreCfg("gold_ore", -19, 32, 3.0, 6, "low"),
-        OreCfg("redstone_ore", -19, 15, 7.0, 7, "low"),
-        OreCfg("lapis_ore", -19, 32, 2.5, 6, "mid"),
-        OreCfg("diamond_ore", -19, 8, 5.6, 5, "low"),
+        OreCfg("coal_ore", -64, 319, 15.0, 12, "high"),
+        OreCfg("iron_ore", -64, 319, 13.0, 9, "mid"),
+        OreCfg("copper_ore", -16, 96, 8.0, 10, "mid"),
+        OreCfg("gold_ore", -64, 64, 7.0, 8, "low"),
+        OreCfg("redstone_ore", -64, 16, 11.0, 8, "low"),
+        OreCfg("lapis_ore", -64, 16, 5.5, 7, "low"),
+        OreCfg("diamond_ore", -64, 16, 10.0, 6, "low"),
+        OreCfg("emerald_ore", -64, 48, 4.0, 5, "high"),
     ]
 
 
@@ -337,7 +338,7 @@ class WorldConfig:
     floor_y: int = -20                # overworld bottom; underworld/void below
     water_level: int = 118
     base_height: int = 128            # raised so the underworld layers get room below
-    hill_amp: float = 11.0
+    hill_amp: float = 8.0
     mountain_amp: float = 74.0
     mountain_amount: float = 0.30      # 0..1, higher => more/higher mountains
     extreme_mountain_amount: float = 0.20  # sparse local mountain ranges
@@ -362,6 +363,10 @@ class WorldConfig:
     biome_desert_hum_cut: float = 0.42
     biome_forest_hum_cut: float = 0.62
     biome_jungle_hum_cut: float = 0.82
+    biome_plains_forest_weight: float = 50.0
+    biome_desert_weight: float = 20.0
+    biome_snow_weight: float = 15.0
+    biome_rare_weight: float = 15.0
     biome_tuned: bool = False
 
     trees: bool = True

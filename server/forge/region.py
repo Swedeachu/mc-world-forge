@@ -14,7 +14,7 @@ import struct
 import time
 import numpy as np
 
-import nbt
+from . import nbt
 
 
 # ---------------------------------------------------------------------------

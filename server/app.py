@@ -19,13 +19,15 @@ import uuid
 from flask import Flask, request, jsonify, send_file, render_template
 from PIL import Image
 
-from generator import WorldConfig, OreCfg, generate_world
-from skywars_generator import (
+from .forge.generator import WorldConfig, OreCfg, generate_world
+from .forge.skywars_generator import (
     SkywarsConfig, SkyOre, BatchEntry, generate_skywars_world,
     _default_ores as _sky_default_ores,
 )
 
-app = Flask(__name__)
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+TEMPLATE_DIR = os.path.join(ROOT_DIR, "web", "templates")
+app = Flask(__name__, template_folder=TEMPLATE_DIR)
 
 VERSIONS = {
     "1.20.1": 3465, "1.20.2": 3578, "1.20.4": 3700, "1.20.6": 3839,
@@ -57,6 +59,12 @@ def _preview_png_b64(arr, max_side=768):
     buf = io.BytesIO()
     img.save(buf, "PNG")
     return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
+
+
+def _set_job_preview(job, arr):
+    job["preview"] = _preview_png_b64(arr)
+    job["preview_rev"] = int(job.get("preview_rev", 0)) + 1
+    job["last_update"] = time.time()
 
 
 def _build_config(form):
@@ -101,10 +109,14 @@ def _build_config(form):
         floor_y=int(num("floor_y", -20, int)),
         water_level=int(num("water_level", 118, int)),
         base_height=int(num("base_height", 128, int)),
-        hill_amp=num("hill_amp", 11.0),
+        hill_amp=num("hill_amp", 8.0),
         mountain_amp=num("mountain_amp", 74.0),
         mountain_amount=num("mountain_amount", 0.30),
         snowline_y=int(num("snowline_y", 246, int)),
+        biome_plains_forest_weight=max(0.0, min(100.0, num("biome_plains_forest_weight", 50.0))),
+        biome_desert_weight=max(0.0, min(100.0, num("biome_desert_weight", 20.0))),
+        biome_snow_weight=max(0.0, min(100.0, num("biome_snow_weight", 15.0))),
+        biome_rare_weight=max(0.0, min(100.0, num("biome_rare_weight", 15.0))),
         caves=bool(form.get("caves", True)),
         cave_intensity=num("cave_intensity", 1.0),
         ravines=bool(form.get("ravines", True)),
@@ -258,7 +270,7 @@ def _run_vanilla_job(job, job_id, cfg, workers, progress, preview_progress):
     _zip_job(job_base, zip_path)
     job["zip_path"] = zip_path
     job["download_name"] = _safe_name(cfg.name) + ".zip"
-    job["preview"] = _preview_png_b64(res["preview"])
+    _set_job_preview(job, res["preview"])
     job["stats"] = {k: v for k, v in res.items() if k != "preview"}
 
 
@@ -289,7 +301,7 @@ def _run_skywars_job(job, job_id, cfg, workers, progress, preview_progress):
     _zip_job(job_base, zip_path)
     job["zip_path"] = zip_path
     job["download_name"] = _safe_name(cfg.name) + ".zip"
-    job["preview"] = _preview_png_b64(res["preview"])
+    _set_job_preview(job, res["preview"])
     job["stats"] = {k: v for k, v in res.items() if k != "preview"}
 
 
@@ -300,12 +312,13 @@ def _run_job(job_id, generator, cfg, workers):
     def progress(p, msg):
         job["progress"] = round(p * 100, 1)
         job["message"] = msg
+        job["last_update"] = time.time()
 
     def preview_progress(arr):
         now = time.time()
         if now - last_preview[0] < 0.50 and not job.get("done"):
             return
-        job["preview"] = _preview_png_b64(arr)
+        _set_job_preview(job, arr)
         last_preview[0] = now
 
     try:
@@ -339,8 +352,10 @@ def generate():
         cfg, workers = _build_config(form)
     job_id = uuid.uuid4().hex
     with JOBS_LOCK:
+        now = time.time()
         JOBS[job_id] = {"progress": 0.0, "message": "Queued", "done": False,
-                        "error": None, "generator": generator}
+                        "error": None, "generator": generator,
+                        "started_at": now, "last_update": now, "preview_rev": 0}
     t = threading.Thread(target=_run_job, args=(job_id, generator, cfg, workers),
                          daemon=True)
     t.start()
@@ -353,7 +368,17 @@ def progress(job_id):
     if not job:
         return jsonify({"error": "unknown job"}), 404
     out = {k: job.get(k) for k in ("progress", "message", "done", "error",
-                                   "stats", "preview", "traceback")}
+                                   "stats", "traceback")}
+    preview_rev = int(job.get("preview_rev", 0))
+    client_preview_rev = request.args.get("preview_rev", default=-1, type=int)
+    out["preview_rev"] = preview_rev
+    if client_preview_rev != preview_rev:
+        out["preview"] = job.get("preview")
+    else:
+        out["preview"] = None
+    now = time.time()
+    out["elapsed"] = round(now - float(job.get("started_at", now)), 1)
+    out["idle"] = round(now - float(job.get("last_update", now)), 1)
     response = jsonify(out)
     response.headers["Cache-Control"] = "no-store, no-cache, max-age=0"
     response.headers["Pragma"] = "no-cache"

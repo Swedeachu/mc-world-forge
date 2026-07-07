@@ -33,8 +33,8 @@ from typing import Callable, Dict, List, Optional, Tuple
 
 import numpy as np
 
-import nbt
-from region import RegionWriter, build_chunk
+from . import nbt
+from .region import RegionWriter, build_chunk
 
 # Vertical layout matches the overworld dimension range used by region.build_chunk.
 MIN_Y = -64

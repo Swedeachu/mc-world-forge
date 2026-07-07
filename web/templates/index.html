@@ -234,7 +234,7 @@
               <span class="hint">grows outward evenly from origin</span></div>
             <div class="field"><label>Bedrock floor Y</label>
               <input type="number" id="floor_y" value="-20">
-              <span class="hint">void below this</span></div>
+              <span class="hint">overworld bottom; with deep dark enabled, caverns continue to bedrock at -64</span></div>
             <div class="field"><label>Water level Y</label>
               <input type="number" id="water_level" value="118"></div>
             <div class="field"><label>Base land height Y</label>
@@ -253,7 +253,7 @@
           <div class="field"><label>Mountain height (blocks)</label>
             <input type="number" id="mountain_amp" value="74"></div>
           <div class="field"><label>Rolling-hill height</label>
-            <input type="number" id="hill_amp" value="11"></div>
+            <input type="number" id="hill_amp" value="8"></div>
           <div class="field"><label>Snow line Y</label>
             <input type="number" id="snowline_y" value="246"></div>
         </div></div>
@@ -261,6 +261,28 @@
 
       <div class="card">
         <div class="hd"><span class="ix">04</span>
+          <div><h3>Biome weights</h3><p>target world mix; totals are normalized</p></div></div>
+        <div class="bd"><div class="grid">
+          <div class="field slider"><div class="top"><label>Plains / forest / taiga group</label>
+            <span class="val" id="biome_plains_forest_weight_v">50</span></div>
+            <input type="range" id="biome_plains_forest_weight" min="0" max="100" step="1" value="50">
+            <span class="hint">plains, oak forest, birch forest, taiga/spruce</span></div>
+          <div class="field slider"><div class="top"><label>Classic desert</label>
+            <span class="val" id="biome_desert_weight_v">20</span></div>
+            <input type="range" id="biome_desert_weight" min="0" max="100" step="1" value="20"></div>
+          <div class="field slider"><div class="top"><label>Snowy mountains</label>
+            <span class="val" id="biome_snow_weight_v">15</span></div>
+            <input type="range" id="biome_snow_weight" min="0" max="100" step="1" value="15">
+            <span class="hint">kept mostly as smaller extreme-hill caps/ranges</span></div>
+          <div class="field slider"><div class="top"><label>Small rare biomes</label>
+            <span class="val" id="biome_rare_weight_v">15</span></div>
+            <input type="range" id="biome_rare_weight" min="0" max="100" step="1" value="15">
+            <span class="hint">jungle, mesa/badlands, swamp</span></div>
+        </div></div>
+      </div>
+
+      <div class="card">
+        <div class="hd"><span class="ix">05</span>
           <div><h3>Caves, water &amp; foliage</h3></div></div>
         <div class="bd"><div class="grid">
           <div class="field check"><input type="checkbox" id="caves" checked>
@@ -295,7 +317,7 @@
       </div>
 
       <div class="card">
-        <div class="hd"><span class="ix">05</span>
+        <div class="hd"><span class="ix">06</span>
           <div><h3>Bedrock border wall</h3></div></div>
         <div class="bd"><div class="grid three">
           <div class="field check"><input type="checkbox" id="wall" checked>
@@ -308,7 +330,7 @@
       </div>
 
       <div class="card">
-        <div class="hd"><span class="ix">06</span>
+        <div class="hd"><span class="ix">07</span>
           <div><h3>Ore veins</h3><p>vanilla-style vein placement</p></div></div>
         <div class="bd">
           <table class="tbl"><thead><tr>
@@ -320,7 +342,7 @@
       </div>
 
       <div class="card">
-        <div class="hd"><span class="ix">07</span>
+        <div class="hd"><span class="ix">08</span>
           <div><h3>Underworld &amp; structures</h3>
             <p>deep dark below the overworld, optional separate Nether box</p></div></div>
         <div class="bd">
@@ -491,13 +513,14 @@ $("seg").querySelectorAll("button").forEach(b=>{
 
 /* ---------- vanilla ores ---------- */
 const DEFAULT_ORES=[
-  {name:"coal_ore",y_min:-64,y_max:319,veins_per_chunk:11,vein_size:12,bias:"high"},
-  {name:"iron_ore",y_min:-64,y_max:319,veins_per_chunk:9,vein_size:8,bias:"mid"},
-  {name:"copper_ore",y_min:0,y_max:96,veins_per_chunk:6,vein_size:8,bias:"mid"},
-  {name:"gold_ore",y_min:-19,y_max:32,veins_per_chunk:3,vein_size:6,bias:"low"},
-  {name:"redstone_ore",y_min:-19,y_max:15,veins_per_chunk:7,vein_size:7,bias:"low"},
-  {name:"lapis_ore",y_min:-19,y_max:32,veins_per_chunk:2.5,vein_size:6,bias:"mid"},
-  {name:"diamond_ore",y_min:-19,y_max:8,veins_per_chunk:7,vein_size:5,bias:"low"},
+  {name:"coal_ore",y_min:-64,y_max:319,veins_per_chunk:15,vein_size:12,bias:"high"},
+  {name:"iron_ore",y_min:-64,y_max:319,veins_per_chunk:13,vein_size:9,bias:"mid"},
+  {name:"copper_ore",y_min:-16,y_max:96,veins_per_chunk:8,vein_size:10,bias:"mid"},
+  {name:"gold_ore",y_min:-64,y_max:64,veins_per_chunk:7,vein_size:8,bias:"low"},
+  {name:"redstone_ore",y_min:-64,y_max:16,veins_per_chunk:11,vein_size:8,bias:"low"},
+  {name:"lapis_ore",y_min:-64,y_max:16,veins_per_chunk:5.5,vein_size:7,bias:"low"},
+  {name:"diamond_ore",y_min:-64,y_max:16,veins_per_chunk:10,vein_size:6,bias:"low"},
+  {name:"emerald_ore",y_min:-64,y_max:48,veins_per_chunk:4,vein_size:5,bias:"high"},
 ];
 function oreRow(o){
   const tr=document.createElement("tr");
@@ -516,7 +539,7 @@ function oreRow(o){
 }
 DEFAULT_ORES.forEach(o=>$("orebody").appendChild(oreRow(o)));
 $("addore").onclick=()=>$("orebody").appendChild(
-  oreRow({name:"emerald_ore",y_min:-19,y_max:80,veins_per_chunk:1,vein_size:3,bias:"high"}));
+  oreRow({name:"amethyst_ore",y_min:-64,y_max:16,veins_per_chunk:2,vein_size:4,bias:"low"}));
 
 /* ---------- skywars ores ---------- */
 const SKY_ORES=[
@@ -562,7 +585,8 @@ $("addbatch").onclick=()=>{$("batchbody").appendChild(batchRow(24,10));updateBat
 updateBatchSummary();
 
 /* ---------- sliders ---------- */
-[["mountain_amount",2],["cave_intensity",1],["river_amount",2],["lake_amount",2],
+[["mountain_amount",2],["biome_plains_forest_weight",0],["biome_desert_weight",0],
+ ["biome_snow_weight",0],["biome_rare_weight",0],["cave_intensity",1],["river_amount",2],["lake_amount",2],
  ["tree_density",1],["middle_ratio",2],["sky_tree_density",1],["rock_density",1],
  ["foliage_density",1],["ore_density",1],["surface_ore",1],["height_jitter",0],
  ["surface_relief",1]].forEach(([id,dp])=>{
@@ -618,6 +642,10 @@ function collect(){
     base_height:+$("base_height").value,
     mountain_amount:+$("mountain_amount").value,mountain_amp:+$("mountain_amp").value,
     hill_amp:+$("hill_amp").value,snowline_y:+$("snowline_y").value,
+    biome_plains_forest_weight:+$("biome_plains_forest_weight").value,
+    biome_desert_weight:+$("biome_desert_weight").value,
+    biome_snow_weight:+$("biome_snow_weight").value,
+    biome_rare_weight:+$("biome_rare_weight").value,
     caves:$("caves").checked,cave_intensity:+$("cave_intensity").value,
     ravines:$("ravines").checked,fluids:$("fluids").checked,
     stone_variants:$("stone_variants").checked,
@@ -633,9 +661,17 @@ function collect(){
 
 /* ---------- run ---------- */
 let poll=null;
+let previewRev=0;
 const setStatus=t=>$("status").textContent=t;
+const fmtStatus=p=>{
+  let msg=p.message||"Generating…";
+  if(typeof p.elapsed==="number")msg+=" · "+p.elapsed.toFixed(1)+"s";
+  if(typeof p.idle==="number"&&p.idle>3&&!p.done)msg+=" · working";
+  return msg;
+};
 $("go").onclick=async()=>{
   const cfg=collect();
+  previewRev=0;
   $("go").disabled=true;$("err").style.display="none";
   $("stats").style.display="none";$("dl").style.display="none";
   $("progress").style.display="block";$("bar").style.width="2%";
@@ -651,9 +687,10 @@ $("go").onclick=async()=>{
   const job=res.job_id;
   poll=setInterval(async()=>{
     let p;
-    try{p=await(await fetch("/progress/"+job+"?t="+Date.now(),{cache:"no-store"})).json();}catch(e){return;}
+    try{p=await(await fetch("/progress/"+job+"?t="+Date.now()+"&preview_rev="+previewRev,{cache:"no-store"})).json();}catch(e){return;}
     $("bar").style.width=Math.max(2,p.progress||0)+"%";
-    if(p.message)setStatus(p.message);
+    setStatus(fmtStatus(p));
+    if(typeof p.preview_rev==="number")previewRev=p.preview_rev;
     if(p.preview){
       const img=$("mapimg");
       if(img.src!==p.preview)img.src=p.preview;
@@ -664,8 +701,8 @@ $("go").onclick=async()=>{
       clearInterval(poll);$("go").disabled=false;
       if(p.error){fail(p.error+"\n\n"+(p.traceback||""));return;}
       $("plate_st").textContent="ready";$("plate_st").style.color="var(--grass)";
-      const img=$("mapimg");if(p.preview)img.src=p.preview;img.style.display="block";
-      $("ph").style.display="none";
+      const img=$("mapimg");if(p.preview)img.src=p.preview;
+      if(img.getAttribute("src")){img.style.display="block";$("ph").style.display="none";}
       showStats(p.stats);
       const dl=$("dl");dl.href="/download/"+job;dl.style.display="flex";
       setStatus("World ready.");

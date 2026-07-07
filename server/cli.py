@@ -9,7 +9,7 @@ import argparse
 import os
 import sys
 
-from generator import WorldConfig, generate_world, _default_ores
+from .forge.generator import WorldConfig, generate_world, _default_ores
 
 VERSIONS = {
     "1.20.1": 3465, "1.20.2": 3578, "1.20.4": 3700, "1.20.6": 3839,

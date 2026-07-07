@@ -13,7 +13,7 @@ ancient_city, nether_fortress, bastion.
 """
 import numpy as np
 
-import nbt
+from . import nbt
 
 # Structure footprint half-extents (blocks) used for bbox overlap tests.
 FOOTPRINT = {
@@ -320,7 +320,7 @@ def _rng_for(cfg, kind, x, z):
 
 
 def _surface_y(cfg, x, z):
-    import generator
+    from . import legacy_generator as generator
     blocks, _ = generator._prepare_palettes(cfg)
     X = np.array([[float(x)]]); Z = np.array([[float(z)]])
     return int(generator._fields(cfg, blocks, X, Z)["H"][0, 0])

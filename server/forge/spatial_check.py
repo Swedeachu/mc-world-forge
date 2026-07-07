@@ -9,7 +9,7 @@ import zlib
 import sys
 import os
 
-from verify import parse_nbt_bytes  # reuse the independent NBT reader
+from .verify import parse_nbt_bytes  # reuse the independent NBT reader
 
 MIN_Y = -64
 
