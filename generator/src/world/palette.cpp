@@ -1,4 +1,8 @@
-#include "mcwf/common.hpp"
+#include "mcwf/blocks.hpp"
+
+#include <string>
+
+#include "mcwf/util.hpp"
 
 int Blocks::add(const std::string& name) {
     std::string raw = trim(name);
@@ -17,6 +21,7 @@ int Blocks::add(const std::string& name) {
     int id = static_cast<int>(names.size());
     names.push_back(n);
     map[n] = id;
+
     return id;
 }
 
@@ -24,8 +29,10 @@ int Blocks::id(const std::string& name) const {
     auto it = map.find(mcName(name));
     if (it == map.end()) {
         auto stone = map.find("minecraft:stone");
+
         return stone == map.end() ? 0 : stone->second;
     }
+
     return it->second;
 }
 
@@ -41,6 +48,7 @@ std::string deepDarkOreName(const std::string& name) {
     if (shortName.rfind("deepslate_", 0) == 0 || shortName.size() < 4 || shortName.substr(shortName.size() - 4) != "_ore") {
         return normalized;
     }
+
     return prefix + "deepslate_" + shortName;
 }
 
@@ -116,6 +124,7 @@ Blocks buildBlocks(const Config& cfg, BlockIds& ids) {
     ids.cactus = b.add("minecraft:cactus");
     ids.sugarCane = b.add("minecraft:sugar_cane");
     const char* flowers[] = {"dandelion", "poppy", "cornflower", "azure_bluet", "oxeye_daisy"};
+
     for (size_t i = 0; i < ids.flowers.size(); ++i) {
         ids.flowers[i] = b.add(std::string("minecraft:") + flowers[i]);
     }
@@ -124,5 +133,6 @@ Blocks buildBlocks(const Config& cfg, BlockIds& ids) {
         b.add(ore.name);
         b.add(deepDarkOreName(ore.name));
     }
+
     return b;
 }

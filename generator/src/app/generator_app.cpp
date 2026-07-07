@@ -1,4 +1,24 @@
-#include "mcwf/common.hpp"
+#include "mcwf/app.hpp"
+
+#include <atomic>
+#include <chrono>
+#include <cmath>
+#include <filesystem>
+#include <iostream>
+#include <memory>
+#include <string>
+#include <thread>
+#include <vector>
+
+#include "mcwf/area.hpp"
+#include "mcwf/blocks.hpp"
+#include "mcwf/config.hpp"
+#include "mcwf/constants.hpp"
+#include "mcwf/preview.hpp"
+#include "mcwf/region.hpp"
+#include "mcwf/util.hpp"
+
+namespace fs = std::filesystem;
 
 int parseWorkers(int argc, char** argv, int totalChunks) {
     int requested = 0;
@@ -40,6 +60,7 @@ int runGenerator(int argc, char** argv) {
     try {
         fs::path cfgPath = argValue(argc, argv, "--config");
         fs::path outDir = argValue(argc, argv, "--out");
+        
         if (cfgPath.empty() || outDir.empty()) {
             std::cerr << "usage: mc_world_forge_generator --config <config.ini> --out <world-dir> [--workers N]\n";
             return 2;
@@ -59,6 +80,7 @@ int runGenerator(int argc, char** argv) {
         fs::path regionDir = outDir / "region";
         fs::create_directories(regionDir);
         fs::create_directories(outDir / "data");
+
         for (const auto& e : fs::directory_iterator(regionDir)) {
             if (e.path().extension() == ".mca") {
                 fs::remove(e.path());
@@ -67,6 +89,7 @@ int runGenerator(int argc, char** argv) {
 
         std::vector<std::unique_ptr<RegionBucket>> buckets;
         buckets.reserve(regions.size());
+
         for (const RegionJob& r : regions) {
             buckets.push_back(std::make_unique<RegionBucket>(r.rx, r.rz));
         }
@@ -99,6 +122,7 @@ int runGenerator(int argc, char** argv) {
             int64_t nowMs = millisecondsNow();
             int64_t lastMs = lastPreviewMs.load();
             bool previewDue = dc >= total || (dc - lastPreview >= previewEvery && nowMs - lastMs >= 400);
+
             if (previewDue && lastPreviewChunks.compare_exchange_strong(lastPreview, dc)) {
                 lastPreviewMs.store(nowMs);
                 flushPreviewFrame(preview);
@@ -107,12 +131,15 @@ int runGenerator(int argc, char** argv) {
 
             int last = lastReportedChunks.load();
             bool shouldReport = dc >= total || dc - last >= reportEvery;
+
             if (!shouldReport) {
                 return;
             }
+
             if (!lastReportedChunks.compare_exchange_strong(last, dc)) {
                 return;
             }
+
             double p = 0.03 + 0.84 * (static_cast<double>(dc) / std::max(1, total));
             reportProgress(p, "Generated " + std::to_string(dc) + "/" + std::to_string(total) + " chunks");
         };
@@ -144,6 +171,7 @@ int runGenerator(int argc, char** argv) {
                 }
             });
         }
+
         for (std::thread& th : pool) {
             th.join();
         }
@@ -155,6 +183,7 @@ int runGenerator(int argc, char** argv) {
         std::atomic<int> nextRegion{0};
         std::atomic<int> writtenRegions{0};
         std::vector<std::thread> writers;
+
         int writerCount = std::min(workers, std::max(1, static_cast<int>(buckets.size())));
         for (int t = 0; t < writerCount; ++t) {
             writers.emplace_back([&]() {
@@ -170,6 +199,7 @@ int runGenerator(int argc, char** argv) {
                 }
             });
         }
+
         for (std::thread& th : writers) {
             th.join();
         }
@@ -179,6 +209,7 @@ int runGenerator(int argc, char** argv) {
         reportProgress(0.95, "Writing native result metadata");
         writeResultJson(cfg, outDir, doneChunks.load(), static_cast<int>(regions.size()), workers, std::round(seconds * 10.0) / 10.0);
         reportProgress(1.0, "Native generation complete");
+
         return 0;
     } catch (const std::exception& e) {
         std::cerr << "native generator error: " << e.what() << "\n";

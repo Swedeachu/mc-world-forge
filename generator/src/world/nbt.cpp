@@ -1,4 +1,13 @@
-#include "mcwf/common.hpp"
+#include "mcwf/nbt.hpp"
+
+#include <algorithm>
+#include <string>
+#include <utility>
+
+#include "mcwf/blocks.hpp"
+#include "mcwf/chunk.hpp"
+#include "mcwf/constants.hpp"
+#include "mcwf/util.hpp"
 
 void putU8(std::vector<uint8_t>& out, uint8_t v) {
     out.push_back(v);
@@ -75,6 +84,7 @@ void nbtEndCompound(std::vector<uint8_t>& out) {
 void nbtLongArray(std::vector<uint8_t>& out, const std::string& name, const std::vector<uint64_t>& arr) {
     putTagHeader(out, 12, name);
     putI32(out, static_cast<int32_t>(arr.size()));
+
     for (uint64_t v : arr) {
         putI64(out, v);
     }
@@ -86,10 +96,12 @@ int bitsFor(int paletteSize, int minBits) {
     }
     int bits = 0;
     int v = paletteSize - 1;
+
     while (v > 0) {
         ++bits;
         v >>= 1;
     }
+
     return std::max(minBits, bits);
 }
 
@@ -97,11 +109,13 @@ std::vector<uint64_t> packIndices(const std::vector<uint32_t>& indices, int bits
     int epl = 64 / bits;
     int nLongs = static_cast<int>((indices.size() + epl - 1) / epl);
     std::vector<uint64_t> out(static_cast<size_t>(nLongs), 0);
+
     for (size_t i = 0; i < indices.size(); ++i) {
         int li = static_cast<int>(i / epl);
         int off = static_cast<int>(i % epl) * bits;
         out[static_cast<size_t>(li)] |= static_cast<uint64_t>(indices[i]) << off;
     }
+
     return out;
 }
 
@@ -117,6 +131,7 @@ void writeBlockPaletteEntry(std::vector<uint8_t>& out, const std::string& rawNam
     nbtString(out, "Name", name);
     if (!props.empty()) {
         std::vector<std::pair<std::string, std::string>> values;
+
         for (const std::string& part : split(props, ',')) {
             size_t eq = part.find('=');
             if (eq == std::string::npos) {
@@ -130,6 +145,7 @@ void writeBlockPaletteEntry(std::vector<uint8_t>& out, const std::string& rawNam
         }
         if (!values.empty()) {
             nbtBeginCompound(out, "Properties");
+
             for (const auto& kv : values) {
                 nbtString(out, kv.first, kv.second);
             }
@@ -153,6 +169,7 @@ std::vector<uint8_t> buildChunkNbt(const Config& cfg, const Blocks& blocks, int 
     nbtLong(out, "InhabitedTime", 0);
 
     nbtBeginList(out, "sections", 10, N_SECTIONS);
+
     for (int s = 0; s < N_SECTIONS; ++s) {
         int secY = MIN_SECTION + s;
         nbtByte(out, "Y", secY);
@@ -161,8 +178,10 @@ std::vector<uint8_t> buildChunkNbt(const Config& cfg, const Blocks& blocks, int 
         std::vector<uint16_t> localIds;
         std::vector<uint32_t> inverse;
         inverse.reserve(4096);
+
         for (int y = 0; y < 16; ++y) {
             int gy = s * 16 + y;
+
             for (int z = 0; z < 16; ++z) {
                 for (int x = 0; x < 16; ++x) {
                     uint16_t gid = blockIds[static_cast<size_t>(blockIndex(gy, z, x))];
@@ -179,6 +198,7 @@ std::vector<uint8_t> buildChunkNbt(const Config& cfg, const Blocks& blocks, int 
 
         nbtBeginCompound(out, "block_states");
         nbtBeginList(out, "palette", 10, static_cast<int32_t>(localIds.size()));
+
         for (uint16_t gid : localIds) {
             writeBlockPaletteEntry(out, blocks.names[static_cast<size_t>(gid)]);
         }
@@ -191,8 +211,10 @@ std::vector<uint8_t> buildChunkNbt(const Config& cfg, const Blocks& blocks, int 
         std::vector<uint16_t> localBioIds;
         std::vector<uint32_t> bioInverse;
         bioInverse.reserve(64);
+
         for (int by = 0; by < 4; ++by) {
             (void)by;
+
             for (int bz = 0; bz < 4; ++bz) {
                 for (int bx = 0; bx < 4; ++bx) {
                     int sx = bx * 4 + 1;
@@ -211,6 +233,7 @@ std::vector<uint8_t> buildChunkNbt(const Config& cfg, const Blocks& blocks, int 
 
         nbtBeginCompound(out, "biomes");
         nbtBeginList(out, "palette", 8, static_cast<int32_t>(localBioIds.size()));
+
         for (uint16_t gid : localBioIds) {
             putStringPayload(out, BIOMES[static_cast<size_t>(gid)]);
         }
@@ -224,9 +247,11 @@ std::vector<uint8_t> buildChunkNbt(const Config& cfg, const Blocks& blocks, int 
 
     std::vector<uint32_t> hm;
     hm.reserve(256);
+
     for (int z = 0; z < 16; ++z) {
         for (int x = 0; x < 16; ++x) {
             int top = -1;
+
             for (int gy = WORLD_HEIGHT - 1; gy >= 0; --gy) {
                 if (blockIds[static_cast<size_t>(blockIndex(gy, z, x))] != 0) {
                     top = gy;
@@ -242,6 +267,7 @@ std::vector<uint8_t> buildChunkNbt(const Config& cfg, const Blocks& blocks, int 
     nbtBeginList(out, "block_ticks", 0, 0);
     nbtBeginList(out, "fluid_ticks", 0, 0);
     nbtBeginList(out, "PostProcessing", 9, N_SECTIONS);
+
     for (int i = 0; i < N_SECTIONS; ++i) {
         nbtListPayloadHeader(out, 0, 0);
     }
@@ -259,6 +285,7 @@ std::vector<uint8_t> buildChunkNbt(const Config& cfg, const Blocks& blocks, int 
 
     nbtByte(out, "isLightOn", 0);
     nbtEndCompound(out);
+
     return out;
 }
 

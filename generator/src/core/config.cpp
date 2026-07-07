@@ -1,4 +1,111 @@
-#include "mcwf/common.hpp"
+#include "mcwf/config.hpp"
+
+#include <fstream>
+#include <functional>
+#include <stdexcept>
+#include <string>
+#include <unordered_map>
+#include <vector>
+
+#include "mcwf/constants.hpp"
+#include "mcwf/util.hpp"
+
+namespace {
+
+// A setter binds one config key to the field it writes and the parse it applies.
+// Building the dispatch table from member pointers keeps adding a new config
+// option a one-line change instead of another rung on an if/else ladder.
+using Setter = std::function<void(Config&, const std::string&)>;
+
+Setter strField(std::string Config::* member) {
+    return [member](Config& cfg, const std::string& v) { cfg.*member = v; };
+}
+
+Setter intField(int Config::* member) {
+    return [member](Config& cfg, const std::string& v) { cfg.*member = std::stoi(v); };
+}
+
+Setter dblField(double Config::* member) {
+    return [member](Config& cfg, const std::string& v) { cfg.*member = std::stod(v); };
+}
+
+Setter boolField(bool Config::* member) {
+    return [member](Config& cfg, const std::string& v) { cfg.*member = parseBool(v); };
+}
+
+const std::unordered_map<std::string, Setter>& configSetters() {
+    static const std::unordered_map<std::string, Setter> setters = {
+        {"name", strField(&Config::name)},
+        {"size", intField(&Config::size)},
+        {"seed", intField(&Config::seed)},
+        {"data_version", intField(&Config::dataVersion)},
+        {"version_name", strField(&Config::versionName)},
+        {"floor_y", intField(&Config::floorY)},
+        {"water_level", intField(&Config::waterLevel)},
+        {"base_height", intField(&Config::baseHeight)},
+        {"hill_amp", dblField(&Config::hillAmp)},
+        {"mountain_amp", dblField(&Config::mountainAmp)},
+        {"mountain_amount", dblField(&Config::mountainAmount)},
+        {"extreme_mountain_amount", dblField(&Config::extremeMountainAmount)},
+        {"snowline_y", intField(&Config::snowlineY)},
+        {"surface_lava_pools", boolField(&Config::surfaceLavaPools)},
+        {"biome_frozen_cut", dblField(&Config::biomeFrozenCut)},
+        {"biome_cold_cut", dblField(&Config::biomeColdCut)},
+        {"biome_warm_cut", dblField(&Config::biomeWarmCut)},
+        {"biome_desert_hum_cut", dblField(&Config::biomeDesertHumCut)},
+        {"biome_forest_hum_cut", dblField(&Config::biomeForestHumCut)},
+        {"biome_jungle_hum_cut", dblField(&Config::biomeJungleHumCut)},
+        {"biome_plains_forest_weight", dblField(&Config::biomePlainsForestWeight)},
+        {"biome_desert_weight", dblField(&Config::biomeDesertWeight)},
+        {"biome_snow_weight", dblField(&Config::biomeSnowWeight)},
+        {"biome_rare_weight", dblField(&Config::biomeRareWeight)},
+        {"caves", boolField(&Config::caves)},
+        {"cave_intensity", dblField(&Config::caveIntensity)},
+        {"ravines", boolField(&Config::ravines)},
+        {"fluids", boolField(&Config::fluids)},
+        {"rivers", boolField(&Config::rivers)},
+        {"river_amount", dblField(&Config::riverAmount)},
+        {"lakes", boolField(&Config::lakes)},
+        {"lake_amount", dblField(&Config::lakeAmount)},
+        {"trees", boolField(&Config::trees)},
+        {"tree_density", dblField(&Config::treeDensity)},
+        {"decorations", boolField(&Config::decorations)},
+        {"stone_variants", boolField(&Config::stoneVariants)},
+        {"wall", boolField(&Config::wall)},
+        {"wall_min_y", intField(&Config::wallMinY)},
+        {"wall_max_y", intField(&Config::wallMaxY)},
+        {"game_type", intField(&Config::gameType)},
+        {"allow_commands", boolField(&Config::allowCommands)},
+        {"deep_dark", boolField(&Config::deepDark)},
+        {"nether", boolField(&Config::nether)},
+        {"structures", boolField(&Config::structures)},
+    };
+
+    return setters;
+}
+
+void applyOre(Config& cfg, const std::string& value) {
+    std::vector<std::string> p = split(value, ',');
+    if (p.size() < 5) {
+        return;
+    }
+
+    OreCfg ore;
+    ore.name = p[0];
+    ore.yMin = std::stoi(p[1]);
+    ore.yMax = std::stoi(p[2]);
+    ore.veinsPerChunk = std::stod(p[3]);
+    ore.veinSize = std::stoi(p[4]);
+    if (p.size() >= 6) {
+        ore.bias = p[5];
+    }
+
+    if (ore.veinsPerChunk > 0.0) {
+        cfg.ores.push_back(ore);
+    }
+}
+
+}  // namespace
 
 Config readConfig(const fs::path& path) {
     Config cfg;
@@ -7,80 +114,33 @@ Config readConfig(const fs::path& path) {
         throw std::runtime_error("could not open config: " + path.string());
     }
 
+    const std::unordered_map<std::string, Setter>& setters = configSetters();
+
     std::string line;
     while (std::getline(in, line)) {
         line = trim(line);
         if (line.empty() || line[0] == '#') {
             continue;
         }
+
         size_t eq = line.find('=');
         if (eq == std::string::npos) {
             continue;
         }
+
         std::string key = trim(line.substr(0, eq));
         std::string value = trim(line.substr(eq + 1));
 
         try {
             if (key == "ore") {
-                std::vector<std::string> p = split(value, ',');
-                if (p.size() >= 5) {
-                    OreCfg ore;
-                    ore.name = p[0];
-                    ore.yMin = std::stoi(p[1]);
-                    ore.yMax = std::stoi(p[2]);
-                    ore.veinsPerChunk = std::stod(p[3]);
-                    ore.veinSize = std::stoi(p[4]);
-                    if (p.size() >= 6) {
-                        ore.bias = p[5];
-                    }
-                    if (ore.veinsPerChunk > 0.0) {
-                        cfg.ores.push_back(ore);
-                    }
-                }
-            } else if (key == "name") cfg.name = value;
-            else if (key == "size") cfg.size = std::stoi(value);
-            else if (key == "seed") cfg.seed = std::stoi(value);
-            else if (key == "data_version") cfg.dataVersion = std::stoi(value);
-            else if (key == "version_name") cfg.versionName = value;
-            else if (key == "floor_y") cfg.floorY = std::stoi(value);
-            else if (key == "water_level") cfg.waterLevel = std::stoi(value);
-            else if (key == "base_height") cfg.baseHeight = std::stoi(value);
-            else if (key == "hill_amp") cfg.hillAmp = std::stod(value);
-            else if (key == "mountain_amp") cfg.mountainAmp = std::stod(value);
-            else if (key == "mountain_amount") cfg.mountainAmount = std::stod(value);
-            else if (key == "extreme_mountain_amount") cfg.extremeMountainAmount = std::stod(value);
-            else if (key == "snowline_y") cfg.snowlineY = std::stoi(value);
-            else if (key == "surface_lava_pools") cfg.surfaceLavaPools = parseBool(value);
-            else if (key == "biome_frozen_cut") cfg.biomeFrozenCut = std::stod(value);
-            else if (key == "biome_cold_cut") cfg.biomeColdCut = std::stod(value);
-            else if (key == "biome_warm_cut") cfg.biomeWarmCut = std::stod(value);
-            else if (key == "biome_desert_hum_cut") cfg.biomeDesertHumCut = std::stod(value);
-            else if (key == "biome_forest_hum_cut") cfg.biomeForestHumCut = std::stod(value);
-            else if (key == "biome_jungle_hum_cut") cfg.biomeJungleHumCut = std::stod(value);
-            else if (key == "biome_plains_forest_weight") cfg.biomePlainsForestWeight = std::stod(value);
-            else if (key == "biome_desert_weight") cfg.biomeDesertWeight = std::stod(value);
-            else if (key == "biome_snow_weight") cfg.biomeSnowWeight = std::stod(value);
-            else if (key == "biome_rare_weight") cfg.biomeRareWeight = std::stod(value);
-            else if (key == "caves") cfg.caves = parseBool(value);
-            else if (key == "cave_intensity") cfg.caveIntensity = std::stod(value);
-            else if (key == "ravines") cfg.ravines = parseBool(value);
-            else if (key == "fluids") cfg.fluids = parseBool(value);
-            else if (key == "rivers") cfg.rivers = parseBool(value);
-            else if (key == "river_amount") cfg.riverAmount = std::stod(value);
-            else if (key == "lakes") cfg.lakes = parseBool(value);
-            else if (key == "lake_amount") cfg.lakeAmount = std::stod(value);
-            else if (key == "trees") cfg.trees = parseBool(value);
-            else if (key == "tree_density") cfg.treeDensity = std::stod(value);
-            else if (key == "decorations") cfg.decorations = parseBool(value);
-            else if (key == "stone_variants") cfg.stoneVariants = parseBool(value);
-            else if (key == "wall") cfg.wall = parseBool(value);
-            else if (key == "wall_min_y") cfg.wallMinY = std::stoi(value);
-            else if (key == "wall_max_y") cfg.wallMaxY = std::stoi(value);
-            else if (key == "game_type") cfg.gameType = std::stoi(value);
-            else if (key == "allow_commands") cfg.allowCommands = parseBool(value);
-            else if (key == "deep_dark") cfg.deepDark = parseBool(value);
-            else if (key == "nether") cfg.nether = parseBool(value);
-            else if (key == "structures") cfg.structures = parseBool(value);
+                applyOre(cfg, value);
+                continue;
+            }
+
+            auto it = setters.find(key);
+            if (it != setters.end()) {
+                it->second(cfg, value);
+            }
         } catch (...) {
             // Keep the same forgiving behavior as the Python form parser.
         }
@@ -103,6 +163,7 @@ Config readConfig(const fs::path& path) {
     cfg.biomeDesertWeight = clampDouble(cfg.biomeDesertWeight, 0.0, 100.0);
     cfg.biomeSnowWeight = clampDouble(cfg.biomeSnowWeight, 0.0, 100.0);
     cfg.biomeRareWeight = clampDouble(cfg.biomeRareWeight, 0.0, 100.0);
+
     if (cfg.biomePlainsForestWeight + cfg.biomeDesertWeight + cfg.biomeSnowWeight + cfg.biomeRareWeight <= 0.001) {
         cfg.biomePlainsForestWeight = 50.0;
         cfg.biomeDesertWeight = 20.0;
@@ -114,8 +175,10 @@ Config readConfig(const fs::path& path) {
     cfg.floorY = clampInt(cfg.floorY, MIN_Y + 1, 256);
     cfg.wallMinY = clampInt(cfg.wallMinY, MIN_Y, 319);
     cfg.wallMaxY = clampInt(cfg.wallMaxY, MIN_Y, 319);
+
     if (cfg.wallMinY > cfg.wallMaxY) {
         std::swap(cfg.wallMinY, cfg.wallMaxY);
     }
+
     return cfg;
 }

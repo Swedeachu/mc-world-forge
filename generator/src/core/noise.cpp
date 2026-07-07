@@ -1,4 +1,10 @@
-#include "mcwf/common.hpp"
+#include "mcwf/noise.hpp"
+
+#include <algorithm>
+#include <cmath>
+
+#include "mcwf/constants.hpp"
+#include "mcwf/util.hpp"
 
 uint32_t mix32(uint32_t n) {
     n ^= (n >> 16);
@@ -10,9 +16,6 @@ uint32_t mix32(uint32_t n) {
 }
 
 uint32_t hashInts(int64_t x, int64_t y, int64_t z, int seed, uint32_t salt) {
-    // Match server/forge/noise.py exactly for lattice noise. The previous C++
-    // implementation used a different mix and extra octave salts, which made
-    // terrain, climate, caves, and preview diverge hard from the Python world.
     uint32_t n = 0;
     n += static_cast<uint32_t>(x * 374761393ll);
     n += static_cast<uint32_t>(y * 668265263ll);
@@ -21,6 +24,7 @@ uint32_t hashInts(int64_t x, int64_t y, int64_t z, int seed, uint32_t salt) {
     n ^= (n >> 13);
     n = static_cast<uint32_t>(n * 1274126177u);
     n ^= (n >> 16);
+
     return n;
 }
 
@@ -45,6 +49,7 @@ double value2d(double x, double z, int seed, uint32_t salt) {
     double c10 = hash01(x0 + 1, 0, z0, seed, salt);
     double c01 = hash01(x0, 0, z0 + 1, seed, salt);
     double c11 = hash01(x0 + 1, 0, z0 + 1, seed, salt);
+
     return lerp(lerp(c00, c10, fx), lerp(c01, c11, fx), fz);
 }
 
@@ -74,6 +79,7 @@ double value3d(double x, double y, double z, int seed, uint32_t salt) {
     double x11 = lerp(c011, c111, fx);
     double y0i = lerp(x00, x10, fy);
     double y1i = lerp(x01, x11, fy);
+
     return lerp(y0i, y1i, fz);
 }
 
@@ -82,12 +88,14 @@ double fbm2d(double x, double z, int seed, int octaves, double freq, double gain
     double amp = 1.0;
     double norm = 0.0;
     double f = freq;
+
     for (int i = 0; i < octaves; ++i) {
         total += amp * value2d(x * f, z * f, seed + i * 1013);
         norm += amp;
         amp *= gain;
         f *= 2.0;
     }
+
     return total / std::max(0.000001, norm);
 }
 
@@ -96,25 +104,45 @@ double fbm3d(double x, double y, double z, int seed, int octaves, double freq, d
     double amp = 1.0;
     double norm = 0.0;
     double f = freq;
+    
     for (int i = 0; i < octaves; ++i) {
         total += amp * value3d(x * f, y * f, z * f, seed + i * 7919);
         norm += amp;
         amp *= gain;
         f *= 2.0;
     }
+
     return total / std::max(0.000001, norm);
 }
 
 double rand01(int x, int y, int z, const Config& cfg, uint32_t salt) {
-    uint32_t n = (static_cast<uint32_t>(x) * 0x632be59bu) ^
-                 (static_cast<uint32_t>(z) * 0x85157af5u) ^
-                 (static_cast<uint32_t>(cfg.seed) * 0x9e3779b9u) ^
-                 (salt * 0x165667b1u) ^
-                 (static_cast<uint32_t>(y) * 0x27d4eb2du);
-    return static_cast<double>(mix32(n)) / 4294967296.0;
+    uint32_t n = (static_cast<uint32_t>(x) * HASH_MUL_X) ^
+                 (static_cast<uint32_t>(z) * HASH_MUL_Z) ^
+                 (static_cast<uint32_t>(cfg.seed) * HASH_MUL_SEED) ^
+                 (salt * HASH_MUL_SALT) ^
+                 (static_cast<uint32_t>(y) * HASH_MUL_Y);
+
+    return static_cast<double>(mix32(n)) * INV_U32;
 }
 
 double smoothstep01(double t) {
     t = clampDouble(t, 0.0, 1.0);
     return t * t * (3.0 - 2.0 * t);
+}
+
+uint32_t cellHash(int64_t x, int64_t z, int seed, uint32_t salt) {
+    uint32_t n = (static_cast<uint32_t>(x) * HASH_MUL_X) ^
+                 (static_cast<uint32_t>(z) * HASH_MUL_Z) ^
+                 (static_cast<uint32_t>(seed) * HASH_MUL_SEED) ^
+                 (salt * HASH_MUL_SALT);
+
+    return mix32(n);
+}
+
+double cellRand01(int64_t x, int64_t z, const Config& cfg, uint32_t salt) {
+    return static_cast<double>(cellHash(x, z, cfg.seed, salt)) * INV_U32;
+}
+
+double cellRandRange(int64_t x, int64_t z, const Config& cfg, uint32_t salt, double lo, double hi) {
+    return lo + (hi - lo) * cellRand01(x, z, cfg, salt);
 }

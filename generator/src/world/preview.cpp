@@ -1,5 +1,14 @@
-#include "mcwf/common.hpp"
+#include "mcwf/preview.hpp"
 
+#include <algorithm>
+#include <fstream>
+#include <system_error>
+
+#include "mcwf/area.hpp"
+#include "mcwf/chunk.hpp"
+#include "mcwf/constants.hpp"
+#include "mcwf/terrain.hpp"
+#include "mcwf/util.hpp"
 
 namespace {
 
@@ -37,10 +46,12 @@ void previewColorFromColumn(const Config& cfg, const BlockIds& ids, int topId, i
     // mostly grass/stone in-game. Only snow-like blocks render as snow.
     if (topId == ids.lava) {
         r = 214; g = 84; b = 36;
+
         return;
     }
     if (topId == ids.water) {
         r = 64; g = 64; b = 255;
+
         return;
     }
     bool leaf = topId == ids.oakLeaves || topId == ids.birchLeaves || topId == ids.spruceLeaves ||
@@ -107,6 +118,7 @@ void previewColor(const Config& cfg, int x, int z, uint8_t& r, uint8_t& g, uint8
     Area ow = overworldArea(cfg);
     if (!insideArea(x, z, ow)) {
         r = 8; g = 10; b = 16;
+
         return;
     }
     TerrainSample s = sampleTerrain(cfg, x, z);
@@ -163,6 +175,7 @@ PreviewFrame createPreviewFrame(const Config& cfg, const fs::path& outDir) {
     frame.xmax = areas[0].xmax;
     frame.zmin = areas[0].zmin;
     frame.zmax = areas[0].zmax;
+
     for (const Area& a : areas) {
         frame.xmin = std::min(frame.xmin, a.xmin);
         frame.xmax = std::max(frame.xmax, a.xmax);
@@ -177,11 +190,13 @@ PreviewFrame createPreviewFrame(const Config& cfg, const fs::path& outDir) {
     frame.path = outDir / "preview.ppm";
     frame.image.assign(static_cast<size_t>(frame.width * frame.height * 3), 0);
     clearPreviewFrame(frame);
+
     return frame;
 }
 
 void clearPreviewFrame(PreviewFrame& frame) {
     std::lock_guard<std::mutex> lock(frame.mutex);
+
     for (int py = 0; py < frame.height; ++py) {
         for (int px = 0; px < frame.width; ++px) {
             size_t idx = static_cast<size_t>((py * frame.width + px) * 3);
@@ -204,11 +219,13 @@ void updatePreviewForChunk(const Config& cfg, PreviewFrame& frame, int cx, int c
     int py1 = clampInt((chunkZ1 - frame.zmin + frame.scale - 1) / frame.scale, 0, frame.height - 1);
 
     std::lock_guard<std::mutex> lock(frame.mutex);
+
     for (int py = py0; py <= py1; ++py) {
         int z = frame.zmin + py * frame.scale;
         if (z < chunkZ0 || z > chunkZ1) {
             continue;
         }
+
         for (int px = px0; px <= px1; ++px) {
             int x = frame.xmin + px * frame.scale;
             if (x < chunkX0 || x > chunkX1) {
@@ -223,7 +240,6 @@ void updatePreviewForChunk(const Config& cfg, PreviewFrame& frame, int cx, int c
         }
     }
 }
-
 
 void updatePreviewFromChunkBlocks(const Config& cfg, const BlockIds& ids, PreviewFrame& frame, int cx, int cz,
                                   const std::vector<uint16_t>& blockIds, const std::vector<uint16_t>& biomeIds) {
@@ -247,6 +263,7 @@ void updatePreviewFromChunkBlocks(const Config& cfg, const BlockIds& ids, Previe
             continue;
         }
         int lz = z - chunkZ0;
+
         for (int px = px0; px <= px1; ++px) {
             int x = frame.xmin + px * frame.scale;
             if (x < chunkX0 || x > chunkX1) {
@@ -256,6 +273,7 @@ void updatePreviewFromChunkBlocks(const Config& cfg, const BlockIds& ids, Previe
             int topId = ids.air;
             int belowId = ids.air;
             int topY = MIN_Y;
+
             for (int y = MIN_Y + WORLD_HEIGHT - 1; y >= MIN_Y; --y) {
                 int id = blockIds[static_cast<size_t>(blockIndex(yIndex(y), lz, lx))];
                 if (!isPreviewAirLike(id, ids)) {
@@ -280,6 +298,7 @@ void updatePreviewFromChunkBlocks(const Config& cfg, const BlockIds& ids, Previe
     }
 
     std::lock_guard<std::mutex> lock(frame.mutex);
+
     for (int py = py0; py <= py1; ++py) {
         for (int px = px0; px <= px1; ++px) {
             size_t li = static_cast<size_t>((py - py0) * localW + (px - px0));
@@ -314,6 +333,7 @@ void flushPreviewFrame(PreviewFrame& frame) {
 
 void writePreview(const Config& cfg, const fs::path& outDir) {
     PreviewFrame frame = createPreviewFrame(cfg, outDir);
+
     for (int cz = floorDiv(frame.zmin, 16); cz <= floorDiv(frame.zmax, 16); ++cz) {
         for (int cx = floorDiv(frame.xmin, 16); cx <= floorDiv(frame.xmax, 16); ++cx) {
             updatePreviewForChunk(cfg, frame, cx, cz);

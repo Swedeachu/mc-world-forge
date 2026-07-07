@@ -12,15 +12,30 @@ add_executable(mc_world_forge_generator
     src/core/noise.cpp
     src/core/util.cpp
     src/world/areas.cpp
-    src/world/chunk.cpp
     src/world/nbt.cpp
     src/world/palette.cpp
     src/world/preview.cpp
     src/world/region.cpp
-    src/world/terrain.cpp
+    # Terrain sampling (public entry points) + concern-split internals.
+    src/world/terrain_sample.cpp
+    src/world/internal/terrain_grid.cpp
+    src/world/internal/terrain_height.cpp
+    src/world/internal/terrain_climate.cpp
+    src/world/internal/terrain_biome.cpp
+    src/world/internal/terrain_water.cpp
+    # Chunk assembly (public entry points) + per-pass sources.
+    src/world/chunk_common.cpp
+    src/world/chunk_ores.cpp
+    src/world/chunk_fluids.cpp
+    src/world/chunk_caves.cpp
+    src/world/chunk_ravines.cpp
+    src/world/chunk_decorate.cpp
+    src/world/chunk_generate.cpp
 )
 
-target_include_directories(mc_world_forge_generator PRIVATE include)
+# "include" holds the public mcwf/*.hpp API; "src/world" lets translation units
+# reach the private "internal/*.hpp" module headers.
+target_include_directories(mc_world_forge_generator PRIVATE include src/world)
 
 if(MSVC)
     target_compile_options(mc_world_forge_generator PRIVATE /O2 /MP /EHsc /permissive- /W4)

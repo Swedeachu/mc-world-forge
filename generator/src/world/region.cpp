@@ -1,4 +1,16 @@
-#include "mcwf/common.hpp"
+#include "mcwf/region.hpp"
+
+#include <ctime>
+#include <fstream>
+#include <iostream>
+#include <string>
+
+#include "mcwf/area.hpp"
+#include "mcwf/chunk.hpp"
+#include "mcwf/constants.hpp"
+#include "mcwf/nbt.hpp"
+#include "mcwf/terrain.hpp"
+#include "mcwf/util.hpp"
 
 std::mutex g_coutMutex;
 
@@ -57,9 +69,11 @@ bool regionChunkInAnyArea(int cx, int cz, const std::vector<Area>& areas, const 
             if (outArea) {
                 *outArea = &area;
             }
+
             return true;
         }
     }
+
     return false;
 }
 
@@ -71,6 +85,7 @@ std::vector<uint8_t> generateChunkPayload(const Config& cfg, const Blocks& block
     } else {
         generateOverworldChunk(cfg, area, blocks, ids, cx, cz, blockIds, biomeIds);
     }
+
     return buildChunkNbt(cfg, blocks, cx, cz, blockIds, biomeIds);
 }
 
@@ -84,6 +99,7 @@ int generateRegion(const Config& cfg, const Blocks& blocks, const BlockIds& ids,
 
     int cBaseX = job.rx * 32;
     int cBaseZ = job.rz * 32;
+
     for (int dz = 0; dz < 32; ++dz) {
         for (int dx = 0; dx < 32; ++dx) {
             int cx = cBaseX + dx;
@@ -108,6 +124,7 @@ int generateRegion(const Config& cfg, const Blocks& blocks, const BlockIds& ids,
     if (chunks > 0) {
         writer.write(regionDir);
     }
+
     return chunks;
 }
 
