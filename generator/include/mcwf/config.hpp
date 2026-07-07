@@ -21,6 +21,7 @@ struct Config {
     int seed = 0;
     int dataVersion = 3465;
     std::string versionName = "1.20.1";
+    std::string outputFormat = "java";
     int floorY = -20;
     int waterLevel = 118;
     int baseHeight = 128;

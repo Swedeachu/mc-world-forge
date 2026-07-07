@@ -40,6 +40,7 @@ const std::unordered_map<std::string, Setter>& configSetters() {
         {"seed", intField(&Config::seed)},
         {"data_version", intField(&Config::dataVersion)},
         {"version_name", strField(&Config::versionName)},
+        {"output_format", strField(&Config::outputFormat)},
         {"floor_y", intField(&Config::floorY)},
         {"water_level", intField(&Config::waterLevel)},
         {"base_height", intField(&Config::baseHeight)},
@@ -169,6 +170,11 @@ Config readConfig(const fs::path& path) {
         cfg.biomeDesertWeight = 20.0;
         cfg.biomeSnowWeight = 15.0;
         cfg.biomeRareWeight = 15.0;
+    }
+
+    cfg.outputFormat = trim(cfg.outputFormat);
+    if (cfg.outputFormat != "bedrock") {
+        cfg.outputFormat = "java";
     }
 
     cfg.size = clampInt(cfg.size, 16, 6000);

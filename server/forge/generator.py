@@ -69,6 +69,7 @@ def _write_native_config(cfg: WorldConfig, path: Path) -> None:
         f"seed={int(cfg.seed)}",
         f"data_version={int(cfg.data_version)}",
         f"version_name={cfg.version_name}",
+        f"output_format={getattr(cfg, 'output_format', 'java')}",
         f"floor_y={int(cfg.floor_y)}",
         f"water_level={int(cfg.water_level)}",
         f"base_height={int(cfg.base_height)}",
@@ -217,13 +218,19 @@ def _run_native(cfg: WorldConfig, out_dir: str,
     else:
         result["preview"] = np.zeros((1, 1, 3), dtype=np.uint8)
 
-    spawn_y = int(result.get("spawn", [0, int(cfg.base_height) + 1, 0])[1])
-    if progress:
-        progress(0.96, "Writing level.dat...")
-    with open(out_path / "level.dat", "wb") as fp:
-        fp.write(legacy_generator._build_level_dat(cfg, spawn_y))
-    with open(out_path / "session.lock", "wb") as fp:
-        fp.write(b"\xe2\x98\x83")
+    output_format = str(getattr(cfg, "output_format", result.get("output_format", "java"))).lower()
+    if output_format == "bedrock":
+        result["output_format"] = "bedrock"
+        if progress:
+            progress(0.96, "Bedrock level.dat and LevelDB already written by native generator")
+    else:
+        spawn_y = int(result.get("spawn", [0, int(cfg.base_height) + 1, 0])[1])
+        if progress:
+            progress(0.96, "Writing level.dat...")
+        with open(out_path / "level.dat", "wb") as fp:
+            fp.write(legacy_generator._build_level_dat(cfg, spawn_y))
+        with open(out_path / "session.lock", "wb") as fp:
+            fp.write(b"\xe2\x98\x83")
 
     return result
 

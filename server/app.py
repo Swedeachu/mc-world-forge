@@ -83,6 +83,9 @@ def _build_config(form):
 
     version = form.get("version", "1.20.1")
     data_version = VERSIONS.get(version, 3465)
+    output_format = str(form.get("output_format", "java")).strip().lower()
+    if output_format not in ("java", "bedrock"):
+        output_format = "java"
 
     ores = []
     for o in form.get("ores", []):
@@ -139,6 +142,7 @@ def _build_config(form):
         structures=bool(form.get("structures", False)),
         ores=ores,
     )
+    cfg.output_format = output_format
     workers = int(num("workers", 0, int))
     workers = max(0, min(64, workers))
     return cfg, workers
@@ -247,6 +251,7 @@ def _run_vanilla_job(job, job_id, cfg, workers, progress, preview_progress):
     map_json = {
         "world": _safe_name(cfg.name),
         "seed": cfg.seed,
+        "output_format": getattr(cfg, "output_format", "java"),
         "bounds": {"x_min": xmin, "x_max": xmax, "z_min": xmin, "z_max": xmax},
         "spawn": list(res.get("spawn", (0, 64, 0))),
         "layers": {

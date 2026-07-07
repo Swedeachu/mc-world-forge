@@ -150,6 +150,7 @@ void writeResultJson(const Config& cfg, const fs::path& outDir, int chunks, int 
     out << "  \"regions\": " << regions << ",\n";
     out << "  \"workers\": " << workers << ",\n";
     out << "  \"job_mode\": \"native_chunk_grid\",\n";
+    out << "  \"output_format\": \"" << cfg.outputFormat << "\",\n";
     out << "  \"spawn\": [0, " << spawnY(cfg) << ", 0],\n";
     out << "  \"bounds\": [" << ow.xmin << ", " << ow.xmax << "],\n";
     if (cfg.nether) {

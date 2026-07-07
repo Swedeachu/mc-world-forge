@@ -75,12 +75,12 @@ The website/server behavior stays the same from the UI's point of view:
 2. Python builds the same `WorldConfig` dataclass as before.
 3. `server/forge/generator.py` writes a small native config file.
 4. Python launches `generator/bin/mc_world_forge_generator.exe` or `generator/bin/mc_world_forge_generator`.
-5. The C++ executable generates chunks/regions/preview metadata using worker threads.
-6. Python reads the result JSON/preview, writes `level.dat`, zips the output, and serves it back through the same download endpoint.
+5. The C++ executable generates chunks/preview metadata using worker threads and writes either Java Anvil regions or Bedrock 1.18 LevelDB chunk data.
+6. Python reads the result JSON/preview, writes the Java `level.dat` only for Java output, zips the output, and serves it back through the same download endpoint.
 
 ## Generator status
 
-The vanilla world path is native C++ and multithreaded by region. It includes deterministic terrain height, biomes, rivers/lakes, ores, cave/ravine carving, trees/decorations, walls, a deep-dark underlayer, and the optional nether box.
+The vanilla world path is native C++ and multithreaded by chunk. It includes deterministic terrain height, biomes, rivers/lakes, ores, cave/ravine carving, trees/decorations, walls, a deep-dark underlayer, and the optional nether box. The web UI defaults to Java output, with a top-bar toggle for direct Bedrock 1.18 output intended for PocketMine/PMMP-style LevelDB worlds.
 
 The old Python vanilla generator is still present as `server.forge.legacy_generator` and can be forced for debugging:
 

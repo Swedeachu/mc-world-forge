@@ -16,6 +16,9 @@ add_executable(mc_world_forge_generator
     src/world/palette.cpp
     src/world/preview.cpp
     src/world/region.cpp
+    src/world/world_writer.cpp
+    src/world/bedrock.cpp
+    src/world/leveldb_log.cpp
     # Terrain sampling (public entry points) + concern-split internals.
     src/world/terrain_sample.cpp
     src/world/internal/terrain_grid.cpp

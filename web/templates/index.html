@@ -47,6 +47,8 @@
   .seg button:hover{color:var(--ink)}
   .seg button.on{color:#06120b;background:var(--grass);box-shadow:0 4px 14px rgba(111,208,106,.3)}
   .seg button.on.sky{color:#061622;background:var(--diamond);box-shadow:0 4px 14px rgba(84,214,222,.32)}
+  .formatseg{margin-left:0}
+  .formatseg button{padding-left:13px;padding-right:13px}
 
   /* ---------- layout ---------- */
   .wrap{max-width:1280px;margin:0 auto;padding:26px;display:grid;
@@ -179,7 +181,11 @@
 <body>
 <div class="top"><div class="row">
   <div class="brand"><span class="logo">◧</span>
-    <span>World&nbsp;Forge<small>finite &amp; skywars worlds · Java Edition</small></span></div>
+    <span>World&nbsp;Forge<small>finite &amp; skywars worlds · Java / Bedrock</small></span></div>
+  <div class="seg formatseg" id="formatseg" title="Vanilla world output format">
+    <button type="button" data-format="java" class="on"><span class="dot"></span>Java</button>
+    <button type="button" data-format="bedrock"><span class="dot"></span>Bedrock 1.18</button>
+  </div>
   <div class="seg" id="seg">
     <button type="button" data-gen="vanilla" class="on"><span class="dot"></span>Vanilla</button>
     <button type="button" data-gen="skywars"><span class="dot"></span>Skywars</button>
@@ -485,7 +491,7 @@
 </div>
 
 <div class="foot">
-  Unzip into your Minecraft <code>saves/</code> folder, then open it from the world list.
+  Java output unzips into your Minecraft <code>saves/</code> folder. Bedrock 1.18 output writes a PMMP-ready <code>db/</code> world.
   Skywars worlds are pure void: the zip bundles the world plus a <code>positions/</code> folder
   with a labelled JSON per cluster (spawn point per spawn island + the centre island's midpoint).
 </div>
@@ -493,6 +499,18 @@
 <script>
 const $=id=>document.getElementById(id);
 let GEN="vanilla";
+let OUTPUT_FORMAT="java";
+
+/* ---------- output format switch ---------- */
+$("formatseg").querySelectorAll("button").forEach(b=>{
+  b.onclick=()=>{
+    OUTPUT_FORMAT=b.dataset.format;
+    $("formatseg").querySelectorAll("button").forEach(x=>{
+      x.classList.toggle("on",x===b);
+      x.classList.toggle("sky",x===b&&OUTPUT_FORMAT==="bedrock");
+    });
+  };
+});
 
 /* ---------- generator switch ---------- */
 $("seg").querySelectorAll("button").forEach(b=>{
@@ -604,7 +622,7 @@ $("random_seed").onclick=()=>{
 /* ---------- collect payload ---------- */
 function collect(){
   const common={
-    generator:GEN,name:$("name").value,seed:+$("seed").value,
+    generator:GEN,output_format:OUTPUT_FORMAT,name:$("name").value,seed:+$("seed").value,
     version:$("version").value,game_type:+$("game_type").value,
     workers:+$("workers").value,allow_commands:$("allow_commands").checked,
   };
@@ -733,6 +751,7 @@ function showStats(s){
     html+=row("chunks generated",s.chunks);
     html+=row("region files",s.regions);
     html+=row("workers / mode",s.workers+" / "+(s.job_mode||"region"));
+    html+=row("output format",s.output_format||"java");
     html+=row("world bounds (x,z)",x0+" … "+x1);
     html+=row("spawn",(s.spawn||[]).join(" / "));
     html+=row("build time",s.seconds+"s");
