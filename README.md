@@ -82,8 +82,6 @@ The website/server behavior stays the same from the UI's point of view:
 
 The vanilla world path is native C++ and multithreaded by region. It includes deterministic terrain height, biomes, rivers/lakes, ores, cave/ravine carving, trees/decorations, walls, a deep-dark underlayer, and the optional nether box.
 
-The deep-dark ore/palette bug fix from the Python generator is mirrored into C++: ore variants are registered up-front, namespaced ore names are converted to valid `minecraft:deepslate_*_ore` IDs, and the deep-dark layer gets its own ore pass after deep-dark material selection so ore IDs cannot outrun the block palette.
-
 The old Python vanilla generator is still present as `server.forge.legacy_generator` and can be forced for debugging:
 
 ```bat
@@ -91,7 +89,7 @@ set MCWF_FORCE_LEGACY=1
 scripts\windows\start_web.bat
 ```
 
-Skywars generation is intentionally left on the Python path because it is a separate specialized generator with island/chest/positions JSON logic.
+Skywars generation is intentionally left on the Python path because it is optimal enough in Python and is its own separate specialized generator with island/chest/positions JSON logic.
 
 ## CLI
 
