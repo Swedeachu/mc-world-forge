@@ -334,6 +334,7 @@ class WorldConfig:
     seed: int = 0
     data_version: int = 3465          # 1.20.1
     version_name: str = "1.20.1"
+    output_format: str = "java"       # java or bedrock; native generator only
 
     floor_y: int = -20                # overworld bottom; underworld/void below
     water_level: int = 118

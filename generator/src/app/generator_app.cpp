@@ -12,11 +12,14 @@
 
 #include "mcwf/area.hpp"
 #include "mcwf/blocks.hpp"
+#include "mcwf/chunk.hpp"
 #include "mcwf/config.hpp"
 #include "mcwf/constants.hpp"
+#include "mcwf/nbt.hpp"
 #include "mcwf/preview.hpp"
 #include "mcwf/region.hpp"
 #include "mcwf/util.hpp"
+#include "mcwf/world_writer.hpp"
 
 namespace fs = std::filesystem;
 
@@ -78,23 +81,23 @@ int runGenerator(int argc, char** argv) {
 
         fs::create_directories(outDir);
         fs::path regionDir = outDir / "region";
-        fs::create_directories(regionDir);
-        fs::create_directories(outDir / "data");
+        if (cfg.outputFormat == "bedrock") {
+            fs::remove_all(regionDir);
+            fs::remove_all(outDir / "db");
+        } else {
+            fs::create_directories(regionDir);
+            fs::create_directories(outDir / "data");
 
-        for (const auto& e : fs::directory_iterator(regionDir)) {
-            if (e.path().extension() == ".mca") {
-                fs::remove(e.path());
+            for (const auto& e : fs::directory_iterator(regionDir)) {
+                if (e.path().extension() == ".mca") {
+                    fs::remove(e.path());
+                }
             }
         }
 
-        std::vector<std::unique_ptr<RegionBucket>> buckets;
-        buckets.reserve(regions.size());
+        std::vector<std::unique_ptr<SharedWorldBucket>> buckets = createWorldBuckets(cfg, regions);
 
-        for (const RegionJob& r : regions) {
-            buckets.push_back(std::make_unique<RegionBucket>(r.rx, r.rz));
-        }
-
-        reportProgress(0.01, "Planning native chunk jobs");
+        reportProgress(0.01, "Planning native " + cfg.outputFormat + " chunk jobs");
         PreviewFrame preview = createPreviewFrame(cfg, outDir);
         flushPreviewFrame(preview);
         reportPreviewReady();
@@ -158,13 +161,21 @@ int runGenerator(int argc, char** argv) {
 
                     const ChunkJob& job = chunks[static_cast<size_t>(idx)];
                     const Area& area = areas[static_cast<size_t>(job.areaIndex)];
-                    std::vector<uint8_t> payload = generateChunkPayload(
-                        cfg, blocks, ids, area, job.cx, job.cz, blockIds, biomeIds);
+                    if (area.kind == "nether") {
+                        generateNetherChunk(cfg, area, blocks, ids, job.cx, job.cz, blockIds, biomeIds);
+                    } else {
+                        generateOverworldChunk(cfg, area, blocks, ids, job.cx, job.cz, blockIds, biomeIds);
+                    }
 
-                    RegionBucket& bucket = *buckets[static_cast<size_t>(job.bucketIndex)];
+                    std::vector<uint8_t> payload;
+                    if (cfg.outputFormat != "bedrock") {
+                        payload = buildChunkNbt(cfg, blocks, job.cx, job.cz, blockIds, biomeIds);
+                    }
+
+                    SharedWorldBucket& bucket = *buckets[static_cast<size_t>(job.bucketIndex)];
                     {
                         std::lock_guard<std::mutex> lock(bucket.mutex);
-                        bucket.writer.addChunk(job.cx, job.cz, std::move(payload));
+                        bucket.writer->addChunk(cfg, blocks, job.cx, job.cz, std::move(payload), blockIds, biomeIds);
                     }
 
                     onChunkDone(job.cx, job.cz, blockIds, biomeIds);
@@ -179,34 +190,17 @@ int runGenerator(int argc, char** argv) {
         flushPreviewFrame(preview);
         reportPreviewReady();
 
-        reportProgress(0.90, "Writing " + std::to_string(regions.size()) + " region files");
-        std::atomic<int> nextRegion{0};
-        std::atomic<int> writtenRegions{0};
-        std::vector<std::thread> writers;
-
-        int writerCount = std::min(workers, std::max(1, static_cast<int>(buckets.size())));
-        for (int t = 0; t < writerCount; ++t) {
-            writers.emplace_back([&]() {
-                while (true) {
-                    int idx = nextRegion.fetch_add(1);
-                    if (idx >= static_cast<int>(buckets.size())) {
-                        break;
-                    }
-                    buckets[static_cast<size_t>(idx)]->writer.write(regionDir);
-                    int wr = writtenRegions.fetch_add(1) + 1;
-                    reportProgress(0.90 + 0.05 * (static_cast<double>(wr) / std::max(1, static_cast<int>(buckets.size()))),
-                                   "Wrote " + std::to_string(wr) + "/" + std::to_string(buckets.size()) + " region files");
-                }
-            });
+        if (cfg.outputFormat == "bedrock") {
+            reportProgress(0.90, "Writing Bedrock 1.18 LevelDB world");
+        } else {
+            reportProgress(0.90, "Writing " + std::to_string(regions.size()) + " region files");
         }
-
-        for (std::thread& th : writers) {
-            th.join();
-        }
+        writeWorldBuckets(cfg, outDir, regionDir, buckets);
+        reportProgress(0.95, "World files written");
 
         auto end = std::chrono::steady_clock::now();
         double seconds = std::chrono::duration<double>(end - start).count();
-        reportProgress(0.95, "Writing native result metadata");
+        reportProgress(0.96, "Writing native result metadata");
         writeResultJson(cfg, outDir, doneChunks.load(), static_cast<int>(regions.size()), workers, std::round(seconds * 10.0) / 10.0);
         reportProgress(1.0, "Native generation complete");
 
