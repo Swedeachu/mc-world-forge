@@ -181,13 +181,14 @@
 <body>
 <div class="top"><div class="row">
   <div class="brand"><span class="logo">◧</span>
-    <span>World&nbsp;Forge<small>finite &amp; skywars worlds · Java / Bedrock</small></span></div>
-  <div class="seg formatseg" id="formatseg" title="Vanilla world output format">
+    <span>World&nbsp;Forge<small>finite, FUHC &amp; skywars worlds · Java / Bedrock</small></span></div>
+  <div class="seg formatseg" id="formatseg" title="World output format">
     <button type="button" data-format="java" class="on"><span class="dot"></span>Java</button>
     <button type="button" data-format="bedrock"><span class="dot"></span>Bedrock 1.18</button>
   </div>
   <div class="seg" id="seg">
     <button type="button" data-gen="vanilla" class="on"><span class="dot"></span>Vanilla</button>
+    <button type="button" data-gen="fuhc"><span class="dot"></span>FUHC</button>
     <button type="button" data-gen="skywars"><span class="dot"></span>Skywars</button>
   </div>
 </div></div>
@@ -469,6 +470,106 @@
         </div></div>
       </div>
     </div>
+
+    <!-- ======================= FUHC PANEL ======================= -->
+    <div id="fuhc-panel" class="hide">
+      <div class="card">
+        <div class="hd"><span class="ix">02</span>
+          <div><h3>Arena batches</h3><p>generate boxed vanilla PvP arenas in one world</p></div></div>
+        <div class="bd">
+          <p style="margin:0 0 12px;color:var(--faint);font-size:12px">
+            Each row defines a full outer box size and how many arenas of that size to build.
+            Arenas are placed on a centred padded grid and exported as <code>fuhc1</code>, <code>fuhc2</code>, and so on.
+            The entered world seed deterministically derives a separate terrain seed for every arena, so biome and feature fields never continue across boxes.</p>
+          <table class="tbl"><thead><tr>
+            <th style="width:30%">Box width / length</th>
+            <th style="width:30%">Glass wall height</th>
+            <th style="width:30%">How many arenas</th><th></th>
+          </tr></thead><tbody id="fuhcbatchbody"></tbody></table>
+          <button type="button" class="addrow" id="addfuhcbatch">+ add batch row</button>
+          <div class="summary" id="fuhcbatchsummary"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="hd"><span class="ix">03</span>
+          <div><h3>Box shell &amp; placement</h3><p>defaults: 5 deep · 5 bedrock · 10 glass · glass roof</p></div></div>
+        <div class="bd"><div class="grid three">
+          <div class="field"><label>Base surface Y</label>
+            <input type="number" id="fuhc_base_y" value="80"></div>
+          <div class="field"><label>Terrain depth</label>
+            <input type="number" id="fuhc_depth" value="5" min="1" max="64">
+            <span class="hint">bottom layer is always bedrock</span></div>
+          <div class="field slider"><div class="top"><label>Surface relief</label>
+            <span class="val" id="fuhc_surface_relief_v">2.0</span></div>
+            <input type="range" id="fuhc_surface_relief" min="0" max="2" step="0.5" value="2">
+            <span class="hint">broad one-block plateaus; zero keeps the arena perfectly flat</span></div>
+          <div class="field"><label>Bedrock wall height</label>
+            <input type="number" id="fuhc_bedrock_wall_height" value="5" min="1" max="64">
+            <span class="hint">starts at the base surface Y, then transitions to glass</span></div>
+          <div class="field"><label>Default glass wall height</label>
+            <input type="number" id="fuhc_glass_wall_height" value="10" min="1" max="128">
+            <span class="hint">new batch rows use this; each row can override it</span></div>
+          <div class="field check"><input type="checkbox" id="fuhc_glass_roof" checked>
+            <label for="fuhc_glass_roof">Glass roof above the walls</label></div>
+          <div class="field"><label>Gap between boxes</label>
+            <input type="number" id="fuhc_arena_gap" value="120" min="16" max="4096">
+            <span class="hint">default 120-block empty edge-to-edge spacing</span></div>
+          <div class="field"><label>Spawn inset from wall</label>
+            <input type="number" id="fuhc_spawn_inset" value="8" min="1" max="512">
+            <span class="hint">paired points stay symmetric around midpoint</span></div>
+        </div></div>
+      </div>
+
+      <div class="card">
+        <div class="hd"><span class="ix">04</span>
+          <div><h3>Balanced arena biome mix</h3><p>whole-batch quotas with broad shallow plateaus and biome materials</p></div></div>
+        <div class="bd"><div class="grid">
+          <div class="field check"><input type="checkbox" id="fuhc_varied_biomes" checked>
+            <label for="fuhc_varied_biomes">Balance biome variety across arenas</label>
+            <span class="hint">weights become deterministic arena counts, then spread across the grid</span></div>
+          <div class="field check"><input type="checkbox" id="fuhc_trees" checked>
+            <label for="fuhc_trees">Trees</label></div>
+          <div class="field slider"><div class="top"><label>Tree density</label>
+            <span class="val" id="fuhc_tree_density_v">0.5</span></div>
+            <input type="range" id="fuhc_tree_density" min="0" max="4" step="0.1" value="0.45">
+            <span class="hint">FUHC applies one-third of this density to keep arenas open</span></div>
+          <div class="field check"><input type="checkbox" id="fuhc_decorations" checked>
+            <label for="fuhc_decorations">Grass, flowers, cane &amp; cactus</label></div>
+          <div class="field check"><input type="checkbox" id="fuhc_stone_variants" checked>
+            <label for="fuhc_stone_variants">Diorite / granite / andesite</label></div>
+          <div></div>
+          <div class="field slider"><div class="top"><label>Green biomes</label>
+            <span class="val" id="fuhc_biome_plains_forest_weight_v">50</span></div>
+            <input type="range" id="fuhc_biome_plains_forest_weight" min="0" max="100" step="1" value="50">
+            <span class="hint">plains, forest, birch, taiga and savanna</span></div>
+          <div class="field slider"><div class="top"><label>Desert</label>
+            <span class="val" id="fuhc_biome_desert_weight_v">20</span></div>
+            <input type="range" id="fuhc_biome_desert_weight" min="0" max="100" step="1" value="20"></div>
+          <div class="field slider"><div class="top"><label>Snow</label>
+            <span class="val" id="fuhc_biome_snow_weight_v">15</span></div>
+            <input type="range" id="fuhc_biome_snow_weight" min="0" max="100" step="1" value="15"></div>
+          <div class="field slider"><div class="top"><label>Rare biomes</label>
+            <span class="val" id="fuhc_biome_rare_weight_v">15</span></div>
+            <input type="range" id="fuhc_biome_rare_weight" min="0" max="100" step="1" value="15">
+            <span class="hint">jungle, swamp and badlands</span></div>
+        </div></div>
+      </div>
+
+      <div class="card">
+        <div class="hd"><span class="ix">05</span>
+          <div><h3>Shallow ore veins</h3><p>uses the same native ore pass as vanilla generation</p></div></div>
+        <div class="bd">
+          <table class="tbl"><thead><tr>
+            <th>Ore</th><th>Min Y</th><th>Max Y</th><th>Veins / chunk</th>
+            <th>Vein size</th><th>Depth bias</th><th></th>
+          </tr></thead><tbody id="fuhcorebody"></tbody></table>
+          <button type="button" class="addrow" id="addfuhcore">+ add ore</button>
+          <p style="margin:12px 0 0;color:var(--faint);font-size:12px">
+            The native generator also writes <code>fuhc_arenas.json</code> in the world folder with exactly two elevated spawn points per arena.</p>
+        </div>
+      </div>
+    </div>
   </form>
 
   <!-- ========================= PLATE ========================= -->
@@ -492,8 +593,8 @@
 
 <div class="foot">
   Java output unzips into your Minecraft <code>saves/</code> folder. Bedrock 1.18 output writes a PMMP-ready <code>db/</code> world.
-  Skywars worlds are pure void: the zip bundles the world plus a <code>positions/</code> folder
-  with a labelled JSON per cluster (spawn point per spawn island + the centre island's midpoint).
+  FUHC worlds bundle <code>fuhc_arenas.json</code> beside the generated world data with symmetric, terrain-elevated duel spawns.
+  Skywars worlds are pure void and include a <code>positions/</code> folder with labelled cluster JSON files.
 </div>
 
 <script>
@@ -523,9 +624,12 @@ $("seg").querySelectorAll("button").forEach(b=>{
     document.body.classList.toggle("sky",GEN==="skywars");
     $("vanilla-panel").classList.toggle("hide",GEN!=="vanilla");
     $("skywars-panel").classList.toggle("hide",GEN!=="skywars");
-    $("go").textContent=GEN==="skywars"?"⚒ Forge skywars world":"⚒ Forge world";
-    if(GEN==="skywars"&&$("name").value==="Forged World")$("name").value="Skywars";
-    if(GEN==="vanilla"&&$("name").value==="Skywars")$("name").value="Forged World";
+    $("fuhc-panel").classList.toggle("hide",GEN!=="fuhc");
+    $("go").textContent=GEN==="skywars"?"⚒ Forge skywars world":GEN==="fuhc"?"⚒ Forge FUHC arenas":"⚒ Forge world";
+    const currentName=$("name").value;
+    if(GEN==="skywars"&&["Forged World","FUHC"].includes(currentName))$("name").value="Skywars";
+    if(GEN==="fuhc"&&["Forged World","Skywars"].includes(currentName))$("name").value="FUHC";
+    if(GEN==="vanilla"&&["Skywars","FUHC"].includes(currentName))$("name").value="Forged World";
   };
 });
 
@@ -557,6 +661,9 @@ function oreRow(o){
 }
 DEFAULT_ORES.forEach(o=>$("orebody").appendChild(oreRow(o)));
 $("addore").onclick=()=>$("orebody").appendChild(
+  oreRow({name:"amethyst_ore",y_min:-64,y_max:16,veins_per_chunk:2,vein_size:4,bias:"low"}));
+DEFAULT_ORES.forEach(o=>$("fuhcorebody").appendChild(oreRow(o)));
+$("addfuhcore").onclick=()=>$("fuhcorebody").appendChild(
   oreRow({name:"amethyst_ore",y_min:-64,y_max:16,veins_per_chunk:2,vein_size:4,bias:"low"}));
 
 /* ---------- skywars ores ---------- */
@@ -602,12 +709,46 @@ $("batchbody").appendChild(batchRow(12,1));
 $("addbatch").onclick=()=>{$("batchbody").appendChild(batchRow(24,10));updateBatchSummary();};
 updateBatchSummary();
 
+/* ---------- FUHC batches ---------- */
+function fuhcBatchRow(size,count,glassHeight=10){
+  const tr=document.createElement("tr");
+  tr.innerHTML=`
+   <td><input type="number" class="fsize" value="${size}" min="16" max="512" style="width:120px"></td>
+   <td><input type="number" class="fglass" value="${glassHeight}" min="1" max="128" style="width:120px"></td>
+   <td><input type="number" class="fcount" value="${count}" min="1" max="500" style="width:120px"></td>
+   <td><button type="button" class="rm">✕</button></td>`;
+  tr.querySelector(".rm").onclick=()=>{tr.remove();updateFuhcBatchSummary();};
+  tr.querySelectorAll("input").forEach(i=>i.addEventListener("input",updateFuhcBatchSummary));
+  return tr;
+}
+function updateFuhcBatchSummary(){
+  let arenas=0,blocks=0;
+  const glassHeights=[];
+  [...$("fuhcbatchbody").querySelectorAll("tr")].forEach(tr=>{
+    const count=+tr.querySelector(".fcount").value||0;
+    const size=+tr.querySelector(".fsize").value||0;
+    const glass=+tr.querySelector(".fglass").value||0;
+    arenas+=count;blocks+=count*size*size;
+    if(count>0&&glass>0){glassHeights.push(glass);}
+  });
+  const uniqueGlass=[...new Set(glassHeights)].sort((a,b)=>a-b);
+  $("fuhcbatchsummary").innerHTML=
+    `<span class="pill">◈ ${arenas} arena${arenas!==1?"s":""}</span>`+
+    `<span class="pill">▦ ${blocks.toLocaleString()} floor blocks</span>`+
+    `<span class="pill">▤ glass ${uniqueGlass.length?uniqueGlass.join(" / "):"-"}</span>`;
+}
+$("fuhcbatchbody").appendChild(fuhcBatchRow(50,1,10));
+$("addfuhcbatch").onclick=()=>{$("fuhcbatchbody").appendChild(fuhcBatchRow(50,10,+$("fuhc_glass_wall_height").value||10));updateFuhcBatchSummary();};
+updateFuhcBatchSummary();
+
 /* ---------- sliders ---------- */
 [["mountain_amount",2],["biome_plains_forest_weight",0],["biome_desert_weight",0],
  ["biome_snow_weight",0],["biome_rare_weight",0],["cave_intensity",1],["river_amount",2],["lake_amount",2],
  ["tree_density",1],["middle_ratio",2],["sky_tree_density",1],["rock_density",1],
  ["foliage_density",1],["ore_density",1],["surface_ore",1],["height_jitter",0],
- ["surface_relief",1]].forEach(([id,dp])=>{
+ ["surface_relief",1],["fuhc_surface_relief",1],["fuhc_tree_density",1],
+ ["fuhc_biome_plains_forest_weight",0],["fuhc_biome_desert_weight",0],
+ ["fuhc_biome_snow_weight",0],["fuhc_biome_rare_weight",0]].forEach(([id,dp])=>{
   const el=$(id),v=$(id+"_v");
   if(!el||!v)return;
   const f=()=>v.textContent=(+el.value).toFixed(dp);
@@ -648,6 +789,38 @@ function collect(){
       chests_per_spawn:+$("chests_per_spawn").value,
       chests_per_middle:+$("chests_per_middle").value,
       ender_chests_main:+$("ender_chests_main").value,ores};
+  }
+  if(GEN==="fuhc"){
+    const fuhc_batches=[...$("fuhcbatchbody").querySelectorAll("tr")].map(tr=>({
+      size:+tr.querySelector(".fsize").value,
+      count:+tr.querySelector(".fcount").value,
+      glass_wall_height:+tr.querySelector(".fglass").value,
+    })).filter(b=>b.count>0);
+    const ores=[...$("fuhcorebody").querySelectorAll("tr")].map(tr=>{
+      const i=tr.querySelectorAll("input");
+      const sel=tr.querySelector(".obias");
+      return {name:i[0].value,y_min:+i[1].value,y_max:+i[2].value,
+              veins_per_chunk:+i[3].value,vein_size:+i[4].value,bias:sel?sel.value:"uniform"};
+    });
+    return {...common,fuhc_batches,
+      fuhc_base_y:+$("fuhc_base_y").value,
+      fuhc_depth:+$("fuhc_depth").value,
+      fuhc_surface_relief:+$("fuhc_surface_relief").value,
+      fuhc_bedrock_wall_height:+$("fuhc_bedrock_wall_height").value,
+      fuhc_glass_wall_height:+$("fuhc_glass_wall_height").value,
+      fuhc_glass_roof:$("fuhc_glass_roof").checked,
+      fuhc_arena_gap:+$("fuhc_arena_gap").value,
+      fuhc_spawn_inset:+$("fuhc_spawn_inset").value,
+      fuhc_varied_biomes:$("fuhc_varied_biomes").checked,
+      biome_plains_forest_weight:+$("fuhc_biome_plains_forest_weight").value,
+      biome_desert_weight:+$("fuhc_biome_desert_weight").value,
+      biome_snow_weight:+$("fuhc_biome_snow_weight").value,
+      biome_rare_weight:+$("fuhc_biome_rare_weight").value,
+      trees:$("fuhc_trees").checked,
+      tree_density:+$("fuhc_tree_density").value,
+      decorations:$("fuhc_decorations").checked,
+      stone_variants:$("fuhc_stone_variants").checked,
+      ores};
   }
   const ores=[...$("orebody").querySelectorAll("tr")].map(tr=>{
     const i=tr.querySelectorAll("input");
@@ -744,6 +917,23 @@ function showStats(s){
     html+=row("region files",s.regions);
     html+=row("workers",s.workers);
     html+=row("world extent",(s.world_size||0)+" blocks");
+    html+=row("spawn",(s.spawn||[]).join(" / "));
+    html+=row("build time",s.seconds+"s");
+  }else if("arenas" in s){
+    const wb=s.world_bounds||[0,0,0,0];
+    html+=row("arenas",s.arenas);
+    html+=row("arena floor blocks",(s.arena_blocks_total||0).toLocaleString());
+    html+=row("chunks generated",s.chunks);
+    html+=row("region files",s.regions);
+    html+=row("workers / mode",s.workers+" / "+(s.job_mode||"native_fuhc_chunk_grid"));
+    html+=row("terrain seeds",s.arena_seed_mode==="derived_per_arena"?"independent per arena":"world seed");
+    if(s.biome_distribution){
+      const d=s.biome_distribution;
+      html+=row("biome quotas",(d.plains_forest_taiga||0)+" green / "+(d.desert||0)+" desert / "+(d.snow||0)+" snow / "+(d.rare||0)+" rare");
+    }
+    html+=row("output format",s.output_format||"java");
+    html+=row("world bounds",wb.join(" / "));
+    html+=row("positions file",s.positions_file||"fuhc_arenas.json");
     html+=row("spawn",(s.spawn||[]).join(" / "));
     html+=row("build time",s.seconds+"s");
   }else{

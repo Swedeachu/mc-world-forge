@@ -53,4 +53,4 @@ struct SharedWorldBucket {
 std::vector<std::unique_ptr<SharedWorldBucket>> createWorldBuckets(const Config& cfg, const std::vector<RegionJob>& regions);
 
 void writeWorldBuckets(const Config& cfg, const fs::path& outDir, const fs::path& regionDir,
-                       const std::vector<std::unique_ptr<SharedWorldBucket>>& buckets);
+                       const std::vector<std::unique_ptr<SharedWorldBucket>>& buckets, const WorldSpawn& spawn);

@@ -11,6 +11,7 @@
 #include "mcwf/nbt.hpp"
 #include "mcwf/terrain.hpp"
 #include "mcwf/util.hpp"
+#include "mcwf/wilderness.hpp"
 
 std::mutex g_coutMutex;
 
@@ -144,6 +145,7 @@ int spawnY(const Config& cfg) {
 
 void writeResultJson(const Config& cfg, const fs::path& outDir, int chunks, int regions, int workers, double seconds) {
     Area ow = overworldArea(cfg);
+    fs::path wildernessFile = writeWildernessJson(cfg, outDir);
     std::ofstream out(outDir / "generator_result.json");
     out << "{\n";
     out << "  \"chunks\": " << chunks << ",\n";
@@ -160,6 +162,7 @@ void writeResultJson(const Config& cfg, const fs::path& outDir, int chunks, int 
         out << "  \"nether_bounds\": null,\n";
     }
     out << "  \"seconds\": " << seconds << ",\n";
+    out << "  \"wilderness_metadata\": \"" << wildernessFile.generic_string() << "\",\n";
     out << "  \"biome_midpoints\": [],\n";
     out << "  \"structures\": [],\n";
     out << "  \"layer_starts\": {\"deep_dark\": ";

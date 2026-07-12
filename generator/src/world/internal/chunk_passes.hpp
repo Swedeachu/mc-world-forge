@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <vector>
 
+#include "mcwf/area.hpp"
 #include "mcwf/blocks.hpp"
 #include "mcwf/config.hpp"
 #include "mcwf/terrain.hpp"
@@ -56,8 +57,8 @@ void settleLiquidFlow(std::vector<uint16_t>& a, const Config& cfg, const BlockId
 // Trees + surface decoration (chunk_decorate.cpp).
 void placeBiomeTree(std::vector<uint16_t>& a, int lx, int lz, int y, int biome, int worldX, int worldZ, const BlockIds& ids, const Config& cfg);
 
-void decorateSurface(std::vector<uint16_t>& a, const Config& cfg, const BlockIds& ids, int cx, int cz,
-                     const std::array<std::array<TerrainSample, 16>, 16>& samples,
+void decorateSurface(std::vector<uint16_t>& a, const Config& cfg, const BlockIds& ids, const Area& area,
+                     int cx, int cz, const std::array<std::array<TerrainSample, 16>, 16>& samples,
                      const bool inside[16][16], const bool onWall[16][16]);
 
 }  // namespace mcwf::chunk

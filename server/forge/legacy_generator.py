@@ -2883,7 +2883,7 @@ def _cactus_ok(block_ids, iz, ix, ay):
 # level.dat
 # ---------------------------------------------------------------------------
 
-def _build_level_dat(cfg, spawn_y):
+def _build_level_dat(cfg, spawn_y, spawn_x=0, spawn_z=0, border_size=None):
     Data = nbt.Compound()
     Data["LevelName"] = nbt.String(cfg.name)
     Data["version"] = nbt.Int(19133)
@@ -2913,21 +2913,23 @@ def _build_level_dat(cfg, spawn_y):
     Data["WanderingTraderSpawnDelay"] = nbt.Int(24000)
     Data["WasModded"] = nbt.Byte(0)
 
-    Data["SpawnX"] = nbt.Int(0)
+    Data["SpawnX"] = nbt.Int(int(spawn_x))
     Data["SpawnY"] = nbt.Int(int(spawn_y))
-    Data["SpawnZ"] = nbt.Int(0)
+    Data["SpawnZ"] = nbt.Int(int(spawn_z))
     Data["SpawnAngle"] = nbt.Float(0.0)
     Data["BorderCenterX"] = nbt.Double(0.0)
     Data["BorderCenterZ"] = nbt.Double(0.0)
-    Data["BorderSize"] = nbt.Double(float(cfg.size + 32))
+    Data["BorderSize"] = nbt.Double(float(border_size if border_size is not None else cfg.size + 32))
 
     dp = nbt.Compound()
     dp["Enabled"] = nbt.List(nbt.String.tag_id, [nbt.String("vanilla")])
     dp["Disabled"] = nbt.List(0, [])
     Data["DataPacks"] = dp
 
+    void_world = str(getattr(cfg, "generator", "vanilla")).strip().lower() == "fuhc"
+
     flat_settings = nbt.Compound()
-    flat_settings["biome"] = nbt.String("minecraft:plains")
+    flat_settings["biome"] = nbt.String("minecraft:the_void" if void_world else "minecraft:plains")
     flat_settings["lakes"] = nbt.Byte(0)
     flat_settings["features"] = nbt.Byte(0)
     flat_settings["layers"] = nbt.List(nbt.Compound.tag_id, [])

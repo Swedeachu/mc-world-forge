@@ -37,7 +37,7 @@ std::vector<std::unique_ptr<SharedWorldBucket>> createWorldBuckets(const Config&
 }
 
 void writeWorldBuckets(const Config& cfg, const fs::path& outDir, const fs::path& regionDir,
-                       const std::vector<std::unique_ptr<SharedWorldBucket>>& buckets) {
+                       const std::vector<std::unique_ptr<SharedWorldBucket>>& buckets, const WorldSpawn& spawn) {
     if (cfg.outputFormat == "bedrock") {
         std::vector<BedrockKv> entries;
         size_t total = 0;
@@ -58,7 +58,7 @@ void writeWorldBuckets(const Config& cfg, const fs::path& outDir, const fs::path
             }
         }
 
-        writeBedrockWorld(cfg, outDir, std::move(entries));
+        writeBedrockWorld(cfg, outDir, std::move(entries), spawn);
         return;
     }
 

@@ -1,5 +1,5 @@
 """
-Python wrapper for the native C++ vanilla world generator.
+Python wrapper for the native C++ vanilla and FUHC world generators.
 
 The web UI and CLI still build the same WorldConfig dataclass as before, but the
 heavy chunk/terrain/region work is delegated to generator/bin/mc_world_forge_generator.exe.
@@ -63,7 +63,9 @@ def _bool(v: bool) -> str:
 
 
 def _write_native_config(cfg: WorldConfig, path: Path) -> None:
+    generator = str(getattr(cfg, "generator", "vanilla")).strip().lower()
     lines = [
+        f"generator={generator}",
         f"name={cfg.name}",
         f"size={int(cfg.size)}",
         f"seed={int(cfg.seed)}",
@@ -110,6 +112,21 @@ def _write_native_config(cfg: WorldConfig, path: Path) -> None:
         f"nether={_bool(cfg.nether)}",
         f"structures={_bool(cfg.structures)}",
     ]
+    if generator == "fuhc":
+        lines.extend([
+            f"fuhc_base_y={int(cfg.fuhc_base_y)}",
+            f"fuhc_depth={int(cfg.fuhc_depth)}",
+            f"fuhc_surface_relief={float(cfg.fuhc_surface_relief)}",
+            f"fuhc_bedrock_wall_height={int(cfg.fuhc_bedrock_wall_height)}",
+            f"fuhc_glass_wall_height={int(cfg.fuhc_glass_wall_height)}",
+            f"fuhc_glass_roof={_bool(cfg.fuhc_glass_roof)}",
+            f"fuhc_arena_gap={int(cfg.fuhc_arena_gap)}",
+            f"fuhc_spawn_inset={int(cfg.fuhc_spawn_inset)}",
+            f"fuhc_varied_biomes={_bool(cfg.fuhc_varied_biomes)}",
+        ])
+        for batch in cfg.batches:
+            glass_wall_height = int(getattr(batch, "glass_wall_height", cfg.fuhc_glass_wall_height))
+            lines.append(f"fuhc_batch={int(batch.size)},{int(batch.count)},{glass_wall_height}")
     for ore in cfg.ores:
         name = str(ore.name).replace(",", "_").strip() or "stone"
         bias = str(ore.bias).replace(",", "_").strip() or "uniform"
@@ -224,11 +241,22 @@ def _run_native(cfg: WorldConfig, out_dir: str,
         if progress:
             progress(0.96, "Bedrock level.dat and LevelDB already written by native generator")
     else:
-        spawn_y = int(result.get("spawn", [0, int(cfg.base_height) + 1, 0])[1])
+        spawn = result.get("spawn", [0, int(cfg.base_height) + 1, 0])
+        spawn_x = int(spawn[0]) if len(spawn) > 0 else 0
+        spawn_y = int(spawn[1]) if len(spawn) > 1 else int(cfg.base_height) + 1
+        spawn_z = int(spawn[2]) if len(spawn) > 2 else 0
+        world_bounds = result.get("world_bounds")
+        border_size = None
+        if isinstance(world_bounds, list) and len(world_bounds) >= 4:
+            border_size = max(int(world_bounds[1]) - int(world_bounds[0]) + 1,
+                              int(world_bounds[3]) - int(world_bounds[2]) + 1) + 32
         if progress:
             progress(0.96, "Writing level.dat...")
         with open(out_path / "level.dat", "wb") as fp:
-            fp.write(legacy_generator._build_level_dat(cfg, spawn_y))
+            fp.write(legacy_generator._build_level_dat(
+                cfg, spawn_y, spawn_x=spawn_x, spawn_z=spawn_z,
+                border_size=border_size,
+            ))
         with open(out_path / "session.lock", "wb") as fp:
             fp.write(b"\xe2\x98\x83")
 

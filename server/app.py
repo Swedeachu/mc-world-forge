@@ -24,6 +24,9 @@ from .forge.skywars_generator import (
     SkywarsConfig, SkyOre, BatchEntry, generate_skywars_world,
     _default_ores as _sky_default_ores,
 )
+from .forge.fuhc_generator import (
+    FuhcConfig, FuhcBatchEntry, generate_fuhc_world,
+)
 
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TEMPLATE_DIR = os.path.join(ROOT_DIR, "web", "templates")
@@ -222,6 +225,97 @@ def _build_skywars_config(form):
     return cfg, workers
 
 
+
+def _build_fuhc_config(form):
+    def num(key, default, cast=float):
+        try:
+            return cast(form.get(key, default))
+        except (TypeError, ValueError):
+            return default
+
+    def seed_num():
+        try:
+            seed = int(form.get("seed", 0))
+        except (TypeError, ValueError):
+            seed = 0
+        return max(-(2 ** 31), min(2 ** 31 - 1, seed))
+
+    version = form.get("version", "1.20.1")
+    data_version = VERSIONS.get(version, 3465)
+    output_format = str(form.get("output_format", "java")).strip().lower()
+    if output_format not in ("java", "bedrock"):
+        output_format = "java"
+
+    batches = []
+    remaining_arenas = 5000
+    for batch in form.get("fuhc_batches", []):
+        if remaining_arenas <= 0:
+            break
+        try:
+            size = max(16, min(512, int(batch.get("size", 50))))
+            count = max(0, min(500, remaining_arenas, int(batch.get("count", 1))))
+            glass_wall_height = max(1, min(128, int(batch.get("glass_wall_height", form.get("fuhc_glass_wall_height", 10)))))
+            if count > 0:
+                batches.append(FuhcBatchEntry(size=size, count=count, glass_wall_height=glass_wall_height))
+                remaining_arenas -= count
+        except (TypeError, ValueError):
+            continue
+    if not batches:
+        batches = [FuhcBatchEntry(50, 1, max(1, min(128, int(num("fuhc_glass_wall_height", 10, int)))))]
+
+    ores = []
+    for ore in form.get("ores", []):
+        try:
+            ores.append(OreCfg(
+                name=str(ore.get("name", "iron_ore")).strip() or "iron_ore",
+                y_min=int(ore.get("y_min", -64)),
+                y_max=int(ore.get("y_max", 319)),
+                veins_per_chunk=float(ore.get("veins_per_chunk", 8)),
+                vein_size=int(ore.get("vein_size", 5)),
+                bias=str(ore.get("bias", "uniform")).strip() or "uniform",
+            ))
+        except (TypeError, ValueError):
+            continue
+    if not ores:
+        ores = FuhcConfig().ores
+
+    base_y = int(num("fuhc_base_y", 80, int))
+    depth = max(1, min(64, int(num("fuhc_depth", 5, int))))
+    cfg = FuhcConfig(
+        name=_safe_name(form.get("name", "FUHC")),
+        size=max(batch.size for batch in batches),
+        seed=seed_num(),
+        data_version=data_version,
+        version_name=version,
+        output_format=output_format,
+        floor_y=base_y - depth + 1,
+        water_level=base_y - depth,
+        base_height=base_y,
+        game_type=int(num("game_type", 0, int)),
+        allow_commands=bool(form.get("allow_commands", True)),
+        batches=batches,
+        fuhc_base_y=base_y,
+        fuhc_depth=depth,
+        fuhc_surface_relief=max(0.0, min(2.0, num("fuhc_surface_relief", 2.0))),
+        fuhc_bedrock_wall_height=max(1, min(64, int(num("fuhc_bedrock_wall_height", 5, int)))),
+        fuhc_glass_wall_height=max(1, min(128, int(num("fuhc_glass_wall_height", 10, int)))),
+        fuhc_glass_roof=bool(form.get("fuhc_glass_roof", True)),
+        fuhc_arena_gap=max(16, min(4096, int(num("fuhc_arena_gap", 120, int)))),
+        fuhc_spawn_inset=max(1, min(512, int(num("fuhc_spawn_inset", 8, int)))),
+        fuhc_varied_biomes=bool(form.get("fuhc_varied_biomes", True)),
+        biome_plains_forest_weight=max(0.0, min(100.0, num("biome_plains_forest_weight", 50.0))),
+        biome_desert_weight=max(0.0, min(100.0, num("biome_desert_weight", 20.0))),
+        biome_snow_weight=max(0.0, min(100.0, num("biome_snow_weight", 15.0))),
+        biome_rare_weight=max(0.0, min(100.0, num("biome_rare_weight", 15.0))),
+        trees=bool(form.get("trees", True)),
+        tree_density=max(0.0, min(4.0, num("tree_density", 0.45))),
+        decorations=bool(form.get("decorations", True)),
+        stone_variants=bool(form.get("stone_variants", True)),
+        ores=ores,
+    )
+    workers = max(0, min(64, int(num("workers", 0, int))))
+    return cfg, workers
+
 def _zip_job(job_base, zip_path):
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
         for root, _, files in os.walk(job_base):
@@ -310,6 +404,24 @@ def _run_skywars_job(job, job_id, cfg, workers, progress, preview_progress):
     job["stats"] = {k: v for k, v in res.items() if k != "preview"}
 
 
+
+def _run_fuhc_job(job, job_id, cfg, workers, progress, preview_progress):
+    job_base = os.path.join(WORKROOT, job_id)
+    out_dir = os.path.join(job_base, _safe_name(cfg.name))
+    os.makedirs(out_dir, exist_ok=True)
+    res = generate_fuhc_world(cfg, out_dir, progress,
+                               workers=workers or None,
+                               preview_progress=preview_progress)
+
+    job["progress"] = 99.0
+    job["message"] = "Zipping FUHC world..."
+    zip_path = os.path.join(WORKROOT, job_id + ".zip")
+    _zip_job(job_base, zip_path)
+    job["zip_path"] = zip_path
+    job["download_name"] = _safe_name(cfg.name) + ".zip"
+    _set_job_preview(job, res["preview"])
+    job["stats"] = {k: v for k, v in res.items() if k != "preview"}
+
 def _run_job(job_id, generator, cfg, workers):
     job = JOBS[job_id]
     last_preview = [0.0]
@@ -329,6 +441,8 @@ def _run_job(job_id, generator, cfg, workers):
     try:
         if generator == "skywars":
             _run_skywars_job(job, job_id, cfg, workers, progress, preview_progress)
+        elif generator == "fuhc":
+            _run_fuhc_job(job, job_id, cfg, workers, progress, preview_progress)
         else:
             _run_vanilla_job(job, job_id, cfg, workers, progress, preview_progress)
         job["progress"] = 100.0
@@ -352,6 +466,8 @@ def generate():
     generator = str(form.get("generator", "vanilla")).strip().lower()
     if generator == "skywars":
         cfg, workers = _build_skywars_config(form)
+    elif generator == "fuhc":
+        cfg, workers = _build_fuhc_config(form)
     else:
         generator = "vanilla"
         cfg, workers = _build_config(form)

@@ -56,6 +56,8 @@ Blocks buildBlocks(const Config& cfg, BlockIds& ids) {
     Blocks b;
     ids.air = b.add("minecraft:air");
     ids.bedrock = b.add("minecraft:bedrock");
+    ids.glass = b.add("minecraft:glass");
+    ids.barrier = b.add("minecraft:barrier");
     ids.stone = b.add("minecraft:stone");
     ids.dirt = b.add("minecraft:dirt");
     ids.coarseDirt = b.add("minecraft:coarse_dirt");
@@ -88,13 +90,23 @@ Blocks buildBlocks(const Config& cfg, BlockIds& ids) {
     ids.sculk = b.add("minecraft:sculk");
 
     ids.magma = b.add("minecraft:magma_block");
-    b.add("minecraft:netherrack");
-    b.add("minecraft:soul_sand");
-    b.add("minecraft:soul_soil");
-    b.add("minecraft:basalt");
-    b.add("minecraft:blackstone");
-    b.add("minecraft:nether_gold_ore");
-    b.add("minecraft:nether_quartz_ore");
+    ids.netherrack = b.add("minecraft:netherrack");
+    ids.soulSand = b.add("minecraft:soul_sand");
+    ids.soulSoil = b.add("minecraft:soul_soil");
+    ids.basalt = b.add("minecraft:basalt");
+    ids.blackstone = b.add("minecraft:blackstone");
+    ids.netherGoldOre = b.add("minecraft:nether_gold_ore");
+    ids.netherQuartzOre = b.add("minecraft:nether_quartz_ore");
+    ids.ancientDebris = b.add("minecraft:ancient_debris");
+    ids.crimsonNylium = b.add("minecraft:crimson_nylium");
+    ids.warpedNylium = b.add("minecraft:warped_nylium");
+    ids.crimsonStem = b.add("minecraft:crimson_stem");
+    ids.warpedStem = b.add("minecraft:warped_stem");
+    ids.netherWartBlock = b.add("minecraft:nether_wart_block");
+    ids.warpedWartBlock = b.add("minecraft:warped_wart_block");
+    ids.shroomlight = b.add("minecraft:shroomlight");
+    ids.glowstone = b.add("minecraft:glowstone");
+    ids.boneBlock = b.add("minecraft:bone_block");
 
     ids.oakLog = b.add("minecraft:oak_log");
     ids.oakLeaves = b.add("minecraft:oak_leaves");

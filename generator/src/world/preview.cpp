@@ -13,7 +13,7 @@
 namespace {
 
 bool isPreviewAirLike(int id, const BlockIds& ids) {
-    return id == ids.air || id == ids.shortGrass || id == ids.fern ||
+    return id == ids.air || id == ids.glass || id == ids.barrier || id == ids.shortGrass || id == ids.fern ||
            id == ids.tallGrassLo || id == ids.tallGrassHi || id == ids.deadBush ||
            id == ids.cactus || id == ids.sugarCane || id == ids.vineNorth ||
            id == ids.vineSouth || id == ids.vineEast || id == ids.vineWest ||
@@ -44,6 +44,15 @@ void previewColorFromColumn(const Config& cfg, const BlockIds& ids, int topId, i
     // a snowy biome tag repaint exposed stone mountains as solid white; that was
     // why the web preview looked like a full snow world while the saved world was
     // mostly grass/stone in-game. Only snow-like blocks render as snow.
+    //
+    // FUHC exports whole boundary chunks, but every column outside the exact
+    // arena rectangle is air. Treat a column with no solid block as background
+    // instead of falling through to the default plains colour.
+    if (topId == ids.air) {
+        r = 12; g = 15; b = 24;
+
+        return;
+    }
     if (topId == ids.lava) {
         r = 214; g = 84; b = 36;
 
@@ -70,6 +79,8 @@ void previewColorFromColumn(const Config& cfg, const BlockIds& ids, int topId, i
         else { r = 64; g = 112; b = 42; }
     } else if (log) {
         r = 91; g = 65; b = 38;
+    } else if (topId == ids.bedrock) {
+        r = 46; g = 49; b = 53;
     } else if (topId == ids.stone || topId == ids.deepslate || topId == ids.tuff) {
         r = 116; g = 132; b = 108;
     } else if (topId == ids.mud) {
@@ -97,7 +108,7 @@ void previewColorFromColumn(const Config& cfg, const BlockIds& ids, int topId, i
     } else {
         r = 127; g = 178; b = 56;
     }
-    shadeColor(height, cfg.baseHeight, r, g, b);
+    shadeColor(height, cfg.generator == "fuhc" ? cfg.fuhcBaseY : cfg.baseHeight, r, g, b);
 }
 
 } // namespace
@@ -169,7 +180,7 @@ void previewColor(const Config& cfg, int x, int z, uint8_t& r, uint8_t& g, uint8
 }
 
 PreviewFrame createPreviewFrame(const Config& cfg, const fs::path& outDir) {
-    std::vector<Area> areas = generationAreas(cfg);
+    std::vector<Area> areas = generationAreas(cfg, false);
     PreviewFrame frame;
     frame.xmin = areas[0].xmin;
     frame.xmax = areas[0].xmax;
@@ -270,6 +281,19 @@ void updatePreviewFromChunkBlocks(const Config& cfg, const BlockIds& ids, Previe
                 continue;
             }
             int lx = x - chunkX0;
+            if (cfg.nether) {
+                Area nether = netherArea(cfg);
+                if (insideArea(x, z, nether)) {
+                    uint8_t r, g, b;
+                    previewColor(cfg, x, z, r, g, b);
+                    size_t li = static_cast<size_t>((py - py0) * localW + (px - px0));
+                    pixels[li * 3 + 0] = r;
+                    pixels[li * 3 + 1] = g;
+                    pixels[li * 3 + 2] = b;
+                    valid[li] = 1;
+                    continue;
+                }
+            }
             int topId = ids.air;
             int belowId = ids.air;
             int topY = MIN_Y;

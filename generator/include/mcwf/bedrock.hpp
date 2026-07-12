@@ -20,4 +20,4 @@ void appendBedrockChunk(const Config& cfg, const Blocks& blocks, int cx, int cz,
                         const std::vector<uint16_t>& biomeIds,
                         std::vector<BedrockKv>& out);
 
-void writeBedrockWorld(const Config& cfg, const fs::path& outDir, std::vector<BedrockKv>&& entries);
+void writeBedrockWorld(const Config& cfg, const fs::path& outDir, std::vector<BedrockKv>&& entries, const WorldSpawn& spawn);

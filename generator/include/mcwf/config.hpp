@@ -15,7 +15,20 @@ struct OreCfg {
     std::string bias = "uniform";
 };
 
+struct FuhcBatchCfg {
+    int size = 50;
+    int count = 1;
+    int glassWallHeight = 10;
+};
+
+struct WorldSpawn {
+    int x = 0;
+    int y = 64;
+    int z = 0;
+};
+
 struct Config {
+    std::string generator = "vanilla";
     std::string name = "Forged World";
     int size = 1000;
     int seed = 0;
@@ -40,6 +53,7 @@ struct Config {
     double biomeDesertWeight = 20.0;
     double biomeSnowWeight = 15.0;
     double biomeRareWeight = 15.0;
+    int biomeOverride = -1;
     bool surfaceLavaPools = true;
     bool caves = true;
     double caveIntensity = 1.0;
@@ -62,6 +76,17 @@ struct Config {
     bool nether = false;
     bool structures = false;
     std::vector<OreCfg> ores;
+
+    int fuhcBaseY = 80;
+    int fuhcDepth = 5;
+    double fuhcSurfaceRelief = 2.0;
+    int fuhcBedrockWallHeight = 5;
+    int fuhcGlassWallHeight = 10;
+    bool fuhcGlassRoof = true;
+    int fuhcArenaGap = 120;
+    int fuhcSpawnInset = 8;
+    bool fuhcVariedBiomes = true;
+    std::vector<FuhcBatchCfg> fuhcBatches;
 };
 
 Config readConfig(const fs::path& path);

@@ -1,5 +1,6 @@
 #include "mcwf/app.hpp"
 
+#include <array>
 #include <atomic>
 #include <chrono>
 #include <cmath>
@@ -14,6 +15,7 @@
 #include "mcwf/blocks.hpp"
 #include "mcwf/chunk.hpp"
 #include "mcwf/config.hpp"
+#include "mcwf/fuhc.hpp"
 #include "mcwf/constants.hpp"
 #include "mcwf/nbt.hpp"
 #include "mcwf/preview.hpp"
@@ -76,6 +78,10 @@ int runGenerator(int argc, char** argv) {
         std::vector<Area> areas = generationAreas(cfg);
         std::vector<RegionJob> regions = buildRegionJobs(cfg);
         std::vector<ChunkJob> chunks = buildChunkJobs(cfg, areas, regions);
+        std::vector<std::array<int, 2>> fuhcSpawnYs;
+        if (cfg.generator == "fuhc") {
+            fuhcSpawnYs.assign(areas.size(), {MIN_Y, MIN_Y});
+        }
         int total = static_cast<int>(chunks.size());
         int workers = std::min(parseWorkers(argc, argv, total), std::max(1, total));
 
@@ -97,7 +103,8 @@ int runGenerator(int argc, char** argv) {
 
         std::vector<std::unique_ptr<SharedWorldBucket>> buckets = createWorldBuckets(cfg, regions);
 
-        reportProgress(0.01, "Planning native " + cfg.outputFormat + " chunk jobs");
+        std::string generatorLabel = cfg.generator == "fuhc" ? "FUHC" : "vanilla";
+        reportProgress(0.01, "Planning native " + generatorLabel + " " + cfg.outputFormat + " chunk jobs");
         PreviewFrame preview = createPreviewFrame(cfg, outDir);
         flushPreviewFrame(preview);
         reportPreviewReady();
@@ -163,6 +170,9 @@ int runGenerator(int argc, char** argv) {
                     const Area& area = areas[static_cast<size_t>(job.areaIndex)];
                     if (area.kind == "nether") {
                         generateNetherChunk(cfg, area, blocks, ids, job.cx, job.cz, blockIds, biomeIds);
+                    } else if (area.kind == "fuhc") {
+                        generateFuhcChunk(cfg, area, blocks, ids, job.cx, job.cz, blockIds, biomeIds,
+                                           fuhcSpawnYs[static_cast<size_t>(area.index)]);
                     } else {
                         generateOverworldChunk(cfg, area, blocks, ids, job.cx, job.cz, blockIds, biomeIds);
                     }
@@ -190,18 +200,29 @@ int runGenerator(int argc, char** argv) {
         flushPreviewFrame(preview);
         reportPreviewReady();
 
+        WorldSpawn worldSpawn = cfg.generator == "fuhc"
+            ? fuhcWorldSpawn(cfg, areas, fuhcSpawnYs)
+            : WorldSpawn{0, spawnY(cfg), 0};
+
         if (cfg.outputFormat == "bedrock") {
             reportProgress(0.90, "Writing Bedrock 1.18 LevelDB world");
         } else {
             reportProgress(0.90, "Writing " + std::to_string(regions.size()) + " region files");
         }
-        writeWorldBuckets(cfg, outDir, regionDir, buckets);
+        writeWorldBuckets(cfg, outDir, regionDir, buckets, worldSpawn);
         reportProgress(0.95, "World files written");
 
         auto end = std::chrono::steady_clock::now();
         double seconds = std::chrono::duration<double>(end - start).count();
+        double roundedSeconds = std::round(seconds * 10.0) / 10.0;
         reportProgress(0.96, "Writing native result metadata");
-        writeResultJson(cfg, outDir, doneChunks.load(), static_cast<int>(regions.size()), workers, std::round(seconds * 10.0) / 10.0);
+        if (cfg.generator == "fuhc") {
+            writeFuhcPositionsJson(cfg, outDir, areas, fuhcSpawnYs);
+            writeFuhcResultJson(cfg, outDir, areas, fuhcSpawnYs, worldSpawn,
+                                 doneChunks.load(), static_cast<int>(regions.size()), workers, roundedSeconds);
+        } else {
+            writeResultJson(cfg, outDir, doneChunks.load(), static_cast<int>(regions.size()), workers, roundedSeconds);
+        }
         reportProgress(1.0, "Native generation complete");
 
         return 0;

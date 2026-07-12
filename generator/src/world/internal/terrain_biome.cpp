@@ -52,6 +52,32 @@ struct ProvinceChoice {
     double strength = 0.0;
 };
 
+BiomeChoice forcedBiomeChoice(int biome) {
+    switch (biome) {
+        case BIOME_DESERT:
+            return {BIOME_DESERT, 0.88, 0.16, 0.0};
+        case BIOME_SAVANNA:
+            return {BIOME_SAVANNA, 0.82, 0.34, 0.0};
+        case BIOME_JUNGLE:
+            return {BIOME_JUNGLE, 0.84, 0.91, 0.0};
+        case BIOME_SNOW:
+            return {BIOME_SNOW, 0.08, 0.46, 0.0};
+        case BIOME_TAIGA:
+            return {BIOME_TAIGA, 0.27, 0.58, 0.0};
+        case BIOME_BADLANDS:
+            return {BIOME_BADLANDS, 0.90, 0.12, 0.88};
+        case BIOME_SWAMP:
+            return {BIOME_SWAMP, 0.74, 0.92, 0.0};
+        case BIOME_FOREST:
+            return {BIOME_FOREST, 0.54, 0.76, 0.0};
+        case BIOME_BIRCH:
+            return {BIOME_BIRCH, 0.56, 0.68, 0.0};
+        case BIOME_PLAINS:
+        default:
+            return {BIOME_PLAINS, 0.58, 0.50, 0.0};
+    }
+}
+
 double weightScore(double weight, double field) {
     weight = std::max(0.001, weight);
 
@@ -132,6 +158,10 @@ ProvinceChoice balancedProvinceBiome(const Config& cfg, double x, double z) {
 }  // namespace
 
 BiomeChoice classifyBiome(const Config& cfg, double x, double z, double h, double mnt, const Climate& c) {
+    if (cfg.biomeOverride >= 0) {
+        return forcedBiomeChoice(cfg.biomeOverride);
+    }
+
     double tempBand = clampDouble(c.temp + c.edge * 0.018, 0.0, 1.0);
     double humBand = clampDouble(c.hum + (fbm2d(x - 818.0, z + 181.0, cfg.seed + 75, 2, 1.0 / 190.0) - 0.5) * 0.040, 0.0, 1.0);
     double frozenCut = std::max(0.08, cfg.biomeFrozenCut - 0.055);
@@ -274,6 +304,10 @@ void cleanBiomeGrid(std::vector<int>& biome, int w, int h) {
 
 void applyBiomeGridSafety(const Config& cfg, int x0, int z0, GridD& hf, const GridD& mnt,
                           GridD& tempBand, GridD& humBand, GridD& bad, std::vector<int>& biome, int w, int h) {
+    if (cfg.biomeOverride >= 0) {
+        return;
+    }
+
     auto bio = [&](int z, int x) -> int& {
         return biome[static_cast<size_t>(z * w + x)];
     };
@@ -343,11 +377,13 @@ void applyBiomeGridSafety(const Config& cfg, int x0, int z0, GridD& hf, const Gr
 }  // namespace mcwf::terrain
 
 int netherBiome(const Config& cfg, int x, int z) {
-    double n = fbm2d(static_cast<double>(x), static_cast<double>(z), cfg.seed + 9100, 3, 1.0 / 180.0);
-    if (n < 0.22) return BIOME_SOUL;
-    if (n > 0.82) return BIOME_BASALT;
-    if (n > 0.65) return BIOME_WARPED;
-    if (n > 0.48) return BIOME_CRIMSON;
+    double sel = fbm2d(static_cast<double>(x) + 7000.0, static_cast<double>(z) - 4000.0, cfg.seed + 501, 3, 1.0 / 210.0);
+    double warm = fbm2d(static_cast<double>(x) - 3000.0, static_cast<double>(z) + 9000.0, cfg.seed + 502, 3, 1.0 / 260.0);
+
+    if (sel > 0.55 && warm > 0.50) return BIOME_CRIMSON;
+    if (sel > 0.55 && warm <= 0.50) return BIOME_WARPED;
+    if (sel <= 0.35 && warm < 0.42) return BIOME_SOUL;
+    if (sel <= 0.30 && warm >= 0.62) return BIOME_BASALT;
 
     return BIOME_NETHER;
 }

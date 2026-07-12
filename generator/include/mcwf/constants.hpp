@@ -10,9 +10,13 @@ constexpr int WORLD_HEIGHT = 384;
 constexpr int MIN_SECTION = MIN_Y / 16;
 constexpr int N_SECTIONS = WORLD_HEIGHT / 16;
 
-// Nether box placement.
+// Nether box placement. The playable Nether cube follows vanilla Bedrock Nether
+// vertical bounds: a rough bedrock floor at Y 0..4, lava sea around Y 31,
+// and a rough bedrock roof at Y 123..127.
 constexpr int NETHER_BOX_SIZE = 1000;
 constexpr int NETHER_BOX_GAP = 500;
+constexpr int NETHER_BOX_FLOOR_Y = 0;
+constexpr int NETHER_LAVA_SEA_Y = 31;
 constexpr int NETHER_BOX_CEILING_Y = 127;
 
 // Region file sector size (Anvil format).

@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "mcwf/constants.hpp"
+#include "mcwf/fuhc.hpp"
 #include "mcwf/noise.hpp"
 #include "mcwf/util.hpp"
 #include "internal/chunk_common.hpp"
@@ -30,6 +31,17 @@ int leavesForBiome(int biome, const BlockIds& ids) {
     return ids.oakLeaves;
 }
 
+void placeGrassPlant(std::vector<uint16_t>& a, int lx, int y, int lz,
+                     const BlockIds& ids, const Config& cfg) {
+    if (cfg.generator == "fuhc") {
+        setBlock(a, lx, y, lz, ids.shortGrass);
+        return;
+    }
+
+    setBlock(a, lx, y, lz, ids.tallGrassLo);
+    setBlock(a, lx, y + 1, lz, ids.tallGrassHi);
+}
+
 }  // namespace
 
 void placeBiomeTree(std::vector<uint16_t>& a, int lx, int lz, int y, int biome, int worldX, int worldZ, const BlockIds& ids, const Config& cfg) {
@@ -43,6 +55,16 @@ void placeBiomeTree(std::vector<uint16_t>& a, int lx, int lz, int y, int biome, 
         trunkH = 7 + static_cast<int>(rand01(worldX, y, worldZ, cfg, 6405) * 6.0);
     } else if (biome == BIOME_SWAMP) {
         trunkH = 4 + static_cast<int>(rand01(worldX, y, worldZ, cfg, 6406) * 2.0);
+    }
+
+    if (cfg.generator == "fuhc" && cfg.fuhcGlassRoof) {
+        int canopyHeight = biome == BIOME_JUNGLE ? 4 : 2;
+        int roofY = cfg.fuhcBaseY + cfg.fuhcBedrockWallHeight + cfg.fuhcGlassWallHeight;
+        int maxTrunkH = roofY - y - canopyHeight - 1;
+        if (maxTrunkH < 4) {
+            return;
+        }
+        trunkH = std::min(trunkH, maxTrunkH);
     }
 
     int log = logForBiome(biome, ids);
@@ -121,8 +143,8 @@ void placeBiomeTree(std::vector<uint16_t>& a, int lx, int lz, int y, int biome, 
     }
 }
 
-void decorateSurface(std::vector<uint16_t>& a, const Config& cfg, const BlockIds& ids, int cx, int cz,
-                     const std::array<std::array<TerrainSample, 16>, 16>& samples,
+void decorateSurface(std::vector<uint16_t>& a, const Config& cfg, const BlockIds& ids, const Area& area,
+                     int cx, int cz, const std::array<std::array<TerrainSample, 16>, 16>& samples,
                      const bool inside[16][16], const bool onWall[16][16]) {
     if (!cfg.decorations) {
         return;
@@ -135,6 +157,9 @@ void decorateSurface(std::vector<uint16_t>& a, const Config& cfg, const BlockIds
             }
             int x = cx * 16 + lx;
             int z = cz * 16 + lz;
+            if (cfg.generator == "fuhc" && withinFuhcSpawnRadius(cfg, area, x, z, 0)) {
+                continue;
+            }
             const TerrainSample& s = samples[static_cast<size_t>(lz)][static_cast<size_t>(lx)];
             if (s.biome == BIOME_SWAMP && (s.river || s.lake || s.waterSurface > s.height) &&
                 s.waterSurface + 1 < MIN_Y + WORLD_HEIGHT &&
@@ -210,16 +235,16 @@ void decorateSurface(std::vector<uint16_t>& a, const Config& cfg, const BlockIds
             double rv = rand01(x, ay, z, cfg, 7300);
             if (s.biome == BIOME_JUNGLE) {
                 if (rv < 0.34) setBlock(a, lx, ay, lz, ids.shortGrass);
-                else if (rv < 0.40 && getBlock(a, lx, ay + 1, lz) == ids.air) { setBlock(a, lx, ay, lz, ids.tallGrassLo); setBlock(a, lx, ay + 1, lz, ids.tallGrassHi); }
+                else if (rv < 0.40 && getBlock(a, lx, ay + 1, lz) == ids.air) placeGrassPlant(a, lx, ay, lz, ids, cfg);
             } else if (s.biome == BIOME_TAIGA) {
                 if (rv < 0.16) setBlock(a, lx, ay, lz, ids.fern);
             } else if (s.biome == BIOME_SWAMP) {
                 if (rv < 0.22) setBlock(a, lx, ay, lz, ids.shortGrass);
                 else if (rv < 0.30) setBlock(a, lx, ay, lz, ids.fern);
-                else if (rv < 0.34 && getBlock(a, lx, ay + 1, lz) == ids.air) { setBlock(a, lx, ay, lz, ids.tallGrassLo); setBlock(a, lx, ay + 1, lz, ids.tallGrassHi); }
+                else if (rv < 0.34 && getBlock(a, lx, ay + 1, lz) == ids.air) placeGrassPlant(a, lx, ay, lz, ids, cfg);
             } else {
                 if (rv < 0.18) setBlock(a, lx, ay, lz, ids.shortGrass);
-                else if (rv < 0.22 && getBlock(a, lx, ay + 1, lz) == ids.air) { setBlock(a, lx, ay, lz, ids.tallGrassLo); setBlock(a, lx, ay + 1, lz, ids.tallGrassHi); }
+                else if (rv < 0.22 && getBlock(a, lx, ay + 1, lz) == ids.air) placeGrassPlant(a, lx, ay, lz, ids, cfg);
                 else if (rv < 0.245) setBlock(a, lx, ay, lz, ids.flowers[static_cast<size_t>(clampInt(static_cast<int>(rand01(x, ay, z, cfg, 7301) * 5.0), 0, 4))]);
             }
         }

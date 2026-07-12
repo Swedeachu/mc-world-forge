@@ -21,6 +21,8 @@ struct Blocks {
 struct BlockIds {
     int air = 0;
     int bedrock = 0;
+    int glass = 0;
+    int barrier = 0;
     int stone = 0;
     int deepslate = 0;
     int tuff = 0;
@@ -44,6 +46,23 @@ struct BlockIds {
     int water = 0;
     int lava = 0;
     int magma = 0;
+    int netherrack = 0;
+    int soulSand = 0;
+    int soulSoil = 0;
+    int basalt = 0;
+    int blackstone = 0;
+    int netherGoldOre = 0;
+    int netherQuartzOre = 0;
+    int ancientDebris = 0;
+    int crimsonNylium = 0;
+    int warpedNylium = 0;
+    int crimsonStem = 0;
+    int warpedStem = 0;
+    int netherWartBlock = 0;
+    int warpedWartBlock = 0;
+    int shroomlight = 0;
+    int glowstone = 0;
+    int boneBlock = 0;
     int sculk = 0;
     int snowLayer = 0;
     int snowBlock = 0;

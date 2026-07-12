@@ -142,7 +142,6 @@ bool hasBlockProperty(const std::string& rawName, const std::string& prop) {
 std::string bedrockBlockName(const std::string& rawName) {
     std::string name = baseBlockName(rawName);
 
-    // hard coded and bad, not scalable, in the future we are going to want to data drive as much as possible with mappings
     if (name == "minecraft:grass_block") return "minecraft:grass";
     if (name == "minecraft:grass") return "minecraft:tallgrass";
     if (name == "minecraft:snow") return "minecraft:snow_layer";
@@ -187,7 +186,7 @@ int bedrockBiomeId(uint16_t biomeId) {
         8,   // nether wastes
         179, // crimson forest
         180, // warped forest
-        178, // soul sand valley fallback on 1.18-era PMMP tables if needed
+        178, // soul sand valley
         181  // basalt deltas
     };
 
@@ -205,7 +204,9 @@ void writeBlockStateProperties(std::vector<uint8_t>& out, const std::string& raw
 
     if (name == "minecraft:bedrock") {
         nbtByte(out, "infiniburn_bit", 0);
-    } else if (name == "minecraft:deepslate" || name == "minecraft:basalt") {
+    } else if (name == "minecraft:deepslate" || name == "minecraft:basalt" ||
+               name == "minecraft:bone_block" || name == "minecraft:ancient_debris" ||
+               name == "minecraft:crimson_stem" || name == "minecraft:warped_stem") {
         nbtString(out, "pillar_axis", "y");
     } else if (name == "minecraft:lava" || name == "minecraft:water") {
         nbtInt(out, "liquid_depth", 0);
@@ -457,21 +458,25 @@ void putEntry(std::vector<BedrockKv>& out, std::string key, uint8_t value) {
     out.push_back({std::move(key), std::vector<uint8_t>{value}});
 }
 
-std::vector<uint8_t> buildBedrockLevelDat(const Config& cfg) {
+std::vector<uint8_t> buildBedrockLevelDat(const Config& cfg, const WorldSpawn& spawn) {
+    bool voidWorld = cfg.generator == "fuhc";
+    const std::string voidLayers =
+        "{\"biome_id\":1,\"block_layers\":[],\"encoding_version\":6,"
+        "\"structure_options\":null,\"world_version\":\"version.post_1_18\"}";
     std::vector<uint8_t> nbt;
     writeRootCompoundStart(nbt);
     nbtInt(nbt, "DayCycleStopTime", -1);
     nbtInt(nbt, "Difficulty", 2);
     nbtByte(nbt, "ForceGameType", 0);
     nbtInt(nbt, "GameType", cfg.gameType);
-    nbtInt(nbt, "Generator", 1);
+    nbtInt(nbt, "Generator", voidWorld ? 2 : 1);
     nbtLong(nbt, "LastPlayed", static_cast<int64_t>(std::time(nullptr)));
     nbtString(nbt, "LevelName", cfg.name);
     nbtInt(nbt, "NetworkVersion", BEDROCK_PROTOCOL_1_18_30);
     nbtLong(nbt, "RandomSeed", cfg.seed);
-    nbtInt(nbt, "SpawnX", 0);
-    nbtInt(nbt, "SpawnY", sampleTerrain(cfg, 0, 0).height + 1);
-    nbtInt(nbt, "SpawnZ", 0);
+    nbtInt(nbt, "SpawnX", spawn.x);
+    nbtInt(nbt, "SpawnY", spawn.y);
+    nbtInt(nbt, "SpawnZ", spawn.z);
     nbtInt(nbt, "StorageVersion", BEDROCK_STORAGE_VERSION);
     nbtLong(nbt, "Time", 0);
     nbtByte(nbt, "eduOffer", 0);
@@ -492,8 +497,11 @@ std::vector<uint8_t> buildBedrockLevelDat(const Config& cfg) {
     putL32(nbt, 18);
     putL32(nbt, 30);
     putL32(nbt, 4);
-    nbtString(nbt, "generatorName", "default");
-    nbtString(nbt, "generatorOptions", "");
+    if (voidWorld) {
+        nbtString(nbt, "FlatWorldLayers", voidLayers);
+    }
+    nbtString(nbt, "generatorName", voidWorld ? "flat" : "default");
+    nbtString(nbt, "generatorOptions", voidWorld ? voidLayers : "");
     nbtEndCompound(nbt);
 
     std::vector<uint8_t> out;
@@ -537,10 +545,10 @@ void appendBedrockChunk(const Config& cfg, const Blocks& blocks, int cx, int cz,
     }
 }
 
-void writeBedrockWorld(const Config& cfg, const fs::path& outDir, std::vector<BedrockKv>&& entries) {
+void writeBedrockWorld(const Config& cfg, const fs::path& outDir, std::vector<BedrockKv>&& entries, const WorldSpawn& spawn) {
     fs::remove_all(outDir / "region");
     fs::create_directories(outDir);
-    writeFileBytes(outDir / "level.dat", buildBedrockLevelDat(cfg));
+    writeFileBytes(outDir / "level.dat", buildBedrockLevelDat(cfg, spawn));
 
     {
         std::ofstream name(outDir / "levelname.txt", std::ios::binary);

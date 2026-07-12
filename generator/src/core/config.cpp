@@ -1,5 +1,7 @@
 #include "mcwf/config.hpp"
 
+#include <algorithm>
+#include <cmath>
 #include <fstream>
 #include <functional>
 #include <stdexcept>
@@ -8,6 +10,7 @@
 #include <vector>
 
 #include "mcwf/constants.hpp"
+#include "mcwf/fuhc.hpp"
 #include "mcwf/util.hpp"
 
 namespace {
@@ -35,6 +38,7 @@ Setter boolField(bool Config::* member) {
 
 const std::unordered_map<std::string, Setter>& configSetters() {
     static const std::unordered_map<std::string, Setter> setters = {
+        {"generator", strField(&Config::generator)},
         {"name", strField(&Config::name)},
         {"size", intField(&Config::size)},
         {"seed", intField(&Config::seed)},
@@ -80,6 +84,15 @@ const std::unordered_map<std::string, Setter>& configSetters() {
         {"deep_dark", boolField(&Config::deepDark)},
         {"nether", boolField(&Config::nether)},
         {"structures", boolField(&Config::structures)},
+        {"fuhc_base_y", intField(&Config::fuhcBaseY)},
+        {"fuhc_depth", intField(&Config::fuhcDepth)},
+        {"fuhc_surface_relief", dblField(&Config::fuhcSurfaceRelief)},
+        {"fuhc_bedrock_wall_height", intField(&Config::fuhcBedrockWallHeight)},
+        {"fuhc_glass_wall_height", intField(&Config::fuhcGlassWallHeight)},
+        {"fuhc_glass_roof", boolField(&Config::fuhcGlassRoof)},
+        {"fuhc_arena_gap", intField(&Config::fuhcArenaGap)},
+        {"fuhc_spawn_inset", intField(&Config::fuhcSpawnInset)},
+        {"fuhc_varied_biomes", boolField(&Config::fuhcVariedBiomes)},
     };
 
     return setters;
@@ -103,6 +116,21 @@ void applyOre(Config& cfg, const std::string& value) {
 
     if (ore.veinsPerChunk > 0.0) {
         cfg.ores.push_back(ore);
+    }
+}
+
+void applyFuhcBatch(Config& cfg, const std::string& value) {
+    std::vector<std::string> p = split(value, ',');
+    if (p.size() < 2) {
+        return;
+    }
+
+    FuhcBatchCfg batch;
+    batch.size = std::stoi(p[0]);
+    batch.count = std::stoi(p[1]);
+    batch.glassWallHeight = p.size() >= 3 ? std::stoi(p[2]) : cfg.fuhcGlassWallHeight;
+    if (batch.count > 0) {
+        cfg.fuhcBatches.push_back(batch);
     }
 }
 
@@ -135,6 +163,10 @@ Config readConfig(const fs::path& path) {
         try {
             if (key == "ore") {
                 applyOre(cfg, value);
+                continue;
+            }
+            if (key == "fuhc_batch") {
+                applyFuhcBatch(cfg, value);
                 continue;
             }
 
@@ -172,6 +204,11 @@ Config readConfig(const fs::path& path) {
         cfg.biomeRareWeight = 15.0;
     }
 
+    cfg.generator = trim(cfg.generator);
+    if (cfg.generator != "fuhc") {
+        cfg.generator = "vanilla";
+    }
+
     cfg.outputFormat = trim(cfg.outputFormat);
     if (cfg.outputFormat != "bedrock") {
         cfg.outputFormat = "java";
@@ -185,6 +222,66 @@ Config readConfig(const fs::path& path) {
     if (cfg.wallMinY > cfg.wallMaxY) {
         std::swap(cfg.wallMinY, cfg.wallMaxY);
     }
+
+    cfg.fuhcDepth = clampInt(cfg.fuhcDepth, 1, 64);
+    cfg.fuhcSurfaceRelief = clampDouble(cfg.fuhcSurfaceRelief, 0.0, 2.0);
+    cfg.fuhcBedrockWallHeight = clampInt(cfg.fuhcBedrockWallHeight, 1, 64);
+    cfg.fuhcGlassWallHeight = clampInt(cfg.fuhcGlassWallHeight, 1, 128);
+    cfg.fuhcArenaGap = clampInt(cfg.fuhcArenaGap, 16, 4096);
+    cfg.fuhcSpawnInset = clampInt(cfg.fuhcSpawnInset, 1, 512);
+
+    if (cfg.fuhcGlassRoof) {
+        int expectedPeak = cfg.fuhcSurfaceRelief > 0.0 ? 1 : 0;
+        int requiredWallStack = expectedPeak + 3;
+        int currentWallStack = cfg.fuhcBedrockWallHeight + cfg.fuhcGlassWallHeight;
+        if (currentWallStack < requiredWallStack) {
+            cfg.fuhcGlassWallHeight = clampInt(
+                cfg.fuhcGlassWallHeight + requiredWallStack - currentWallStack, 1, 128);
+        }
+    }
+
+    std::vector<FuhcBatchCfg> normalizedBatches;
+    normalizedBatches.reserve(cfg.fuhcBatches.size());
+    int remainingArenas = 5000;
+    for (FuhcBatchCfg batch : cfg.fuhcBatches) {
+        if (remainingArenas <= 0) {
+            break;
+        }
+
+        batch.size = clampInt(batch.size, 16, 512);
+        batch.count = clampInt(batch.count, 0, std::min(500, remainingArenas));
+        batch.glassWallHeight = clampInt(batch.glassWallHeight, 1, 128);
+        if (cfg.fuhcGlassRoof) {
+            int expectedPeak = cfg.fuhcSurfaceRelief > 0.0 ? 1 : 0;
+            int requiredWallStack = expectedPeak + 3;
+            int currentWallStack = cfg.fuhcBedrockWallHeight + batch.glassWallHeight;
+            if (currentWallStack < requiredWallStack) {
+                batch.glassWallHeight = clampInt(
+                    batch.glassWallHeight + requiredWallStack - currentWallStack, 1, 128);
+            }
+        }
+        if (batch.count <= 0) {
+            continue;
+        }
+
+        normalizedBatches.push_back(batch);
+        remainingArenas -= batch.count;
+    }
+    cfg.fuhcBatches = std::move(normalizedBatches);
+    if (cfg.generator == "fuhc" && cfg.fuhcBatches.empty()) {
+        cfg.fuhcBatches.push_back({50, 1, cfg.fuhcGlassWallHeight});
+    }
+
+    int maxGlassWallHeight = cfg.fuhcGlassWallHeight;
+    for (const FuhcBatchCfg& batch : cfg.fuhcBatches) {
+        maxGlassWallHeight = std::max(maxGlassWallHeight, batch.glassWallHeight);
+    }
+
+    int shellTopPadding = cfg.fuhcBedrockWallHeight + maxGlassWallHeight +
+                          (cfg.fuhcGlassRoof ? 1 : 0) + FUHC_BARRIER_LAYERS;
+    int minBaseY = MIN_Y + cfg.fuhcDepth - 1 + FUHC_BARRIER_LAYERS;
+    int maxBaseY = MIN_Y + WORLD_HEIGHT - shellTopPadding - 1;
+    cfg.fuhcBaseY = clampInt(cfg.fuhcBaseY, minBaseY, std::max(minBaseY, maxBaseY));
 
     return cfg;
 }
