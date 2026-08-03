@@ -112,6 +112,7 @@ def _build_config(form):
         seed=seed_num(),
         data_version=data_version,
         version_name=version,
+        output_format=output_format,
         floor_y=int(num("floor_y", -20, int)),
         water_level=int(num("water_level", 118, int)),
         base_height=int(num("base_height", 128, int)),
@@ -167,6 +168,9 @@ def _build_skywars_config(form):
 
     version = form.get("version", "1.20.1")
     data_version = VERSIONS.get(version, 3465)
+    output_format = str(form.get("output_format", "java")).strip().lower()
+    if output_format not in ("java", "bedrock"):
+        output_format = "java"
 
     batches = []
     for b in form.get("batches", []):
@@ -197,6 +201,7 @@ def _build_skywars_config(form):
         seed=seed_num(),
         data_version=data_version,
         version_name=version,
+        output_format=output_format,
         game_type=int(num("game_type", 0, int)),
         allow_commands=bool(form.get("allow_commands", True)),
         batches=batches,
