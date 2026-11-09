@@ -123,7 +123,18 @@ def _write_native_config(cfg: WorldConfig, path: Path) -> None:
             f"fuhc_arena_gap={int(cfg.fuhc_arena_gap)}",
             f"fuhc_spawn_inset={int(cfg.fuhc_spawn_inset)}",
             f"fuhc_varied_biomes={_bool(cfg.fuhc_varied_biomes)}",
+            f"fuhc_layout={getattr(cfg, 'fuhc_layout', 'square')}",
+            f"fuhc_chunk_gap={int(getattr(cfg, 'fuhc_chunk_gap', 8))}",
+            f"fuhc_row_columns={int(getattr(cfg, 'fuhc_row_columns', 0))}",
+            f"fuhc_origin_x={int(getattr(cfg, 'fuhc_origin_x', 0))}",
+            f"fuhc_origin_z={int(getattr(cfg, 'fuhc_origin_z', 0))}",
+            f"fuhc_wall_style={getattr(cfg, 'fuhc_wall_style', 'classic')}",
+            f"fuhc_roof_block={getattr(cfg, 'fuhc_roof_block', 'glass')}",
         ])
+        pattern = [str(name).replace(",", "").strip() for name in getattr(cfg, "fuhc_wall_pattern", [])]
+        pattern = [name for name in pattern if name]
+        if pattern:
+            lines.append("fuhc_wall_pattern=" + ",".join(pattern))
         for batch in cfg.batches:
             glass_wall_height = int(getattr(batch, "glass_wall_height", cfg.fuhc_glass_wall_height))
             lines.append(f"fuhc_batch={int(batch.size)},{int(batch.count)},{glass_wall_height}")

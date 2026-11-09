@@ -52,6 +52,19 @@ class FuhcConfig(WorldConfig):
     fuhc_arena_gap: int = 120
     fuhc_spawn_inset: int = 8
     fuhc_varied_biomes: bool = True
+    # "square": one centred grid on a shared pitch. "rows": one band of rows per
+    # batch, every footprint chunk aligned with fuhc_chunk_gap empty chunks
+    # between neighbours, starting at fuhc_origin_x/z (block coordinates).
+    fuhc_layout: str = "square"
+    fuhc_chunk_gap: int = 8
+    fuhc_row_columns: int = 0
+    fuhc_origin_x: int = 0
+    fuhc_origin_z: int = 0
+    # "classic": bedrock then glass. "pattern": the whole wall is built from
+    # fuhc_wall_pattern, one block per diagonal step.
+    fuhc_wall_style: str = "classic"
+    fuhc_wall_pattern: List[str] = field(default_factory=list)
+    fuhc_roof_block: str = "glass"
 
 
 def generate_fuhc_world(cfg: FuhcConfig, out_dir: str,

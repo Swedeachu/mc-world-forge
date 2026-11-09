@@ -87,6 +87,22 @@ struct Config {
     int fuhcSpawnInset = 8;
     bool fuhcVariedBiomes = true;
     std::vector<FuhcBatchCfg> fuhcBatches;
+
+    // "square" packs every arena into one centred grid on a shared pitch.
+    // "rows" gives each batch its own band of rows, chunk aligned, so every
+    // arena footprint (barrier shell included) starts on a chunk edge and is
+    // separated from its neighbours by fuhcChunkGap empty chunks.
+    std::string fuhcLayout = "square";
+    int fuhcChunkGap = 8;
+    int fuhcRowColumns = 0;
+    int fuhcOriginX = 0;
+    int fuhcOriginZ = 0;
+
+    // "classic" is bedrock below a glass band. "pattern" builds the whole wall,
+    // floor to top, from fuhcWallPattern repeated along the diagonal.
+    std::string fuhcWallStyle = "classic";
+    std::vector<std::string> fuhcWallPattern;
+    std::string fuhcRoofBlock = "glass";
 };
 
 Config readConfig(const fs::path& path);

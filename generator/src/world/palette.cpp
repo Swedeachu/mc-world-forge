@@ -58,6 +58,11 @@ Blocks buildBlocks(const Config& cfg, BlockIds& ids) {
     ids.bedrock = b.add("minecraft:bedrock");
     ids.glass = b.add("minecraft:glass");
     ids.barrier = b.add("minecraft:barrier");
+    if (cfg.fuhcWallStyle == "pattern") {
+        for (const std::string& name : cfg.fuhcWallPattern) {
+            ids.fuhcWallPattern.push_back(b.add(name));
+        }
+    }
     ids.stone = b.add("minecraft:stone");
     ids.dirt = b.add("minecraft:dirt");
     ids.coarseDirt = b.add("minecraft:coarse_dirt");

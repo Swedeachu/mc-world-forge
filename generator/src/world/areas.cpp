@@ -56,6 +56,73 @@ Area netherArea(const Config& cfg) {
     return area;
 }
 
+namespace {
+
+Area makeFuhcArea(const Config& cfg, bool buildBiomeMaps, const FuhcBiomeAssignment& biome,
+                  int index, int size, int glassWallHeight, int xmin, int zmin) {
+    Area area;
+    area.kind = "fuhc";
+    area.xmin = xmin;
+    area.zmin = zmin;
+    area.xmax = xmin + size - 1;
+    area.zmax = zmin + size - 1;
+    area.index = index;
+    area.size = size;
+    area.fuhcGlassWallHeight = glassWallHeight;
+    area.centerX = xmin + size / 2;
+    area.centerZ = zmin + size / 2;
+    area.biomeGroup = biome.group;
+    area.biome = biome.biome;
+    if (buildBiomeMaps) {
+        prepareFuhcBiomeBlend(cfg, area);
+    }
+
+    return area;
+}
+
+// Each batch gets its own band of rows. A cell is the arena's footprint
+// (barrier shell included) rounded up to whole chunks, plus the configured
+// number of empty chunks, so the barrier shell always starts on a chunk edge
+// and neighbouring footprints never share a chunk.
+std::vector<Area> fuhcRowAreas(const Config& cfg, bool buildBiomeMaps, int count) {
+    std::vector<FuhcBiomeAssignment> biomes = planFuhcBiomes(cfg, count);
+    std::vector<Area> out;
+    out.reserve(static_cast<size_t>(count));
+
+    int originChunkX = floorDiv(cfg.fuhcOriginX, 16);
+    int bandChunkZ = floorDiv(cfg.fuhcOriginZ, 16);
+    int index = 0;
+
+    for (const FuhcBatchCfg& batch : cfg.fuhcBatches) {
+        if (batch.count <= 0) {
+            continue;
+        }
+
+        int footprintChunks = (batch.size + 2 * FUHC_BARRIER_LAYERS + 15) / 16;
+        int pitch = footprintChunks + cfg.fuhcChunkGap;
+        int columns = cfg.fuhcRowColumns > 0
+            ? cfg.fuhcRowColumns
+            : static_cast<int>(std::ceil(std::sqrt(static_cast<double>(batch.count))));
+        int rows = (batch.count + columns - 1) / columns;
+
+        for (int i = 0; i < batch.count; ++i) {
+            int column = i % columns;
+            int row = i / columns;
+            int xmin = (originChunkX + column * pitch) * 16 + FUHC_BARRIER_LAYERS;
+            int zmin = (bandChunkZ + row * pitch) * 16 + FUHC_BARRIER_LAYERS;
+            out.push_back(makeFuhcArea(cfg, buildBiomeMaps, biomes[static_cast<size_t>(index)], index,
+                                       batch.size, batch.glassWallHeight, xmin, zmin));
+            ++index;
+        }
+
+        bandChunkZ += rows * pitch;
+    }
+
+    return out;
+}
+
+}  // namespace
+
 std::vector<Area> fuhcAreas(const Config& cfg, bool buildBiomeMaps) {
     struct ArenaSpec {
         int size = 50;
@@ -77,6 +144,10 @@ std::vector<Area> fuhcAreas(const Config& cfg, bool buildBiomeMaps) {
     }
 
     int count = static_cast<int>(specs.size());
+    if (cfg.fuhcLayout == "rows") {
+        return fuhcRowAreas(cfg, buildBiomeMaps, count);
+    }
+
     int columns = static_cast<int>(std::ceil(std::sqrt(static_cast<double>(count))));
     int rows = (count + columns - 1) / columns;
     int pitch = maxSize + cfg.fuhcArenaGap;

@@ -93,6 +93,13 @@ const std::unordered_map<std::string, Setter>& configSetters() {
         {"fuhc_arena_gap", intField(&Config::fuhcArenaGap)},
         {"fuhc_spawn_inset", intField(&Config::fuhcSpawnInset)},
         {"fuhc_varied_biomes", boolField(&Config::fuhcVariedBiomes)},
+        {"fuhc_layout", strField(&Config::fuhcLayout)},
+        {"fuhc_chunk_gap", intField(&Config::fuhcChunkGap)},
+        {"fuhc_row_columns", intField(&Config::fuhcRowColumns)},
+        {"fuhc_origin_x", intField(&Config::fuhcOriginX)},
+        {"fuhc_origin_z", intField(&Config::fuhcOriginZ)},
+        {"fuhc_wall_style", strField(&Config::fuhcWallStyle)},
+        {"fuhc_roof_block", strField(&Config::fuhcRoofBlock)},
     };
 
     return setters;
@@ -169,6 +176,16 @@ Config readConfig(const fs::path& path) {
                 applyFuhcBatch(cfg, value);
                 continue;
             }
+            if (key == "fuhc_wall_pattern") {
+                cfg.fuhcWallPattern.clear();
+                for (const std::string& name : split(value, ',')) {
+                    std::string block = trim(name);
+                    if (!block.empty()) {
+                        cfg.fuhcWallPattern.push_back(block.find(':') == std::string::npos ? "minecraft:" + block : block);
+                    }
+                }
+                continue;
+            }
 
             auto it = setters.find(key);
             if (it != setters.end()) {
@@ -229,6 +246,17 @@ Config readConfig(const fs::path& path) {
     cfg.fuhcGlassWallHeight = clampInt(cfg.fuhcGlassWallHeight, 1, 128);
     cfg.fuhcArenaGap = clampInt(cfg.fuhcArenaGap, 16, 4096);
     cfg.fuhcSpawnInset = clampInt(cfg.fuhcSpawnInset, 1, 512);
+    cfg.fuhcChunkGap = clampInt(cfg.fuhcChunkGap, 0, 256);
+    cfg.fuhcRowColumns = clampInt(cfg.fuhcRowColumns, 0, 256);
+    if (cfg.fuhcLayout != "rows") {
+        cfg.fuhcLayout = "square";
+    }
+    if (cfg.fuhcWallStyle != "pattern" || cfg.fuhcWallPattern.empty()) {
+        cfg.fuhcWallStyle = "classic";
+    }
+    if (cfg.fuhcRoofBlock != "barrier") {
+        cfg.fuhcRoofBlock = "glass";
+    }
 
     if (cfg.fuhcGlassRoof) {
         int expectedPeak = cfg.fuhcSurfaceRelief > 0.0 ? 1 : 0;

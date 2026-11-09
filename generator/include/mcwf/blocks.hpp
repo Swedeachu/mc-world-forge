@@ -23,6 +23,8 @@ struct BlockIds {
     int bedrock = 0;
     int glass = 0;
     int barrier = 0;
+    // FUHC "pattern" walls: one id per step of the diagonal repeat.
+    std::vector<int> fuhcWallPattern;
     int stone = 0;
     int deepslate = 0;
     int tuff = 0;

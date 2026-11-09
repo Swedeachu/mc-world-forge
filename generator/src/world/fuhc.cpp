@@ -354,7 +354,7 @@ bool isFuhcVegetation(int id, const BlockIds& ids) {
 int findFuhcGround(const std::vector<uint16_t>& blocks, const BlockIds& ids, int lx, int lz, int floorY, int ceilingY) {
     for (int y = std::min(ceilingY - 1, MIN_Y + WORLD_HEIGHT - 1); y >= floorY; --y) {
         int id = mcwf::chunk::getBlock(blocks, lx, y, lz);
-        if (id == ids.air || id == ids.glass || isFuhcVegetation(id, ids)) {
+        if (id == ids.air || id == ids.glass || id == ids.barrier || isFuhcVegetation(id, ids)) {
             continue;
         }
 
@@ -922,6 +922,9 @@ void generateFuhcChunk(const Config& cfg, const Area& area, const Blocks& blocks
     int barrierRoofStartY = fuhcBarrierRoofStartY(cfg, area);
     int barrierRoofEndY = fuhcBarrierRoofEndY(cfg, area);
     int openTopY = barrierRoofStartY;
+    int roofId = cfg.fuhcRoofBlock == "barrier" ? ids.barrier : ids.glass;
+    int patternLength = static_cast<int>(ids.fuhcWallPattern.size());
+    bool patternWalls = cfg.fuhcWallStyle == "pattern" && patternLength > 0;
 
     for (int lz = 0; lz < 16; ++lz) {
         int z = cz * 16 + lz;
@@ -953,7 +956,19 @@ void generateFuhcChunk(const Config& cfg, const Area& area, const Blocks& blocks
             }
 
             bool wall = atAreaWall(x, z, area);
-            if (wall) {
+            if (wall && patternWalls) {
+                // Stripes run along the diagonal: the step advances one per block
+                // along the wall and one per block up, so the repeat climbs at 45°.
+                int along = (z == area.zmin || z == area.zmax) ? x : z;
+                for (int y = MIN_Y; y < MIN_Y + WORLD_HEIGHT; ++y) {
+                    int id = ids.air;
+                    if (y >= floorY && y <= glassEndY) {
+                        int step = ((along + y) % patternLength + patternLength) % patternLength;
+                        id = ids.fuhcWallPattern[static_cast<size_t>(step)];
+                    }
+                    mcwf::chunk::setBlock(outBlocks, lx, y, lz, id);
+                }
+            } else if (wall) {
                 for (int y = MIN_Y; y < MIN_Y + WORLD_HEIGHT; ++y) {
                     int id = ids.air;
                     if (y >= floorY && y <= bedrockEndY) {
@@ -968,7 +983,7 @@ void generateFuhcChunk(const Config& cfg, const Area& area, const Blocks& blocks
             }
 
             if (cfg.fuhcGlassRoof && yIndex(roofY) >= 0 && yIndex(roofY) < WORLD_HEIGHT) {
-                mcwf::chunk::setBlock(outBlocks, lx, roofY, lz, ids.glass);
+                mcwf::chunk::setBlock(outBlocks, lx, roofY, lz, roofId);
             }
 
             for (int y = barrierFloorStartY; y < floorY; ++y) {
